@@ -32,6 +32,9 @@ class Whatsminer:
 		elif cmd == "led":
 			mode = args[0]
 			resp = wacmd(cmd="set_led", additional_params={"param": mode})
+		elif cmd == "set_target_freq":
+			freq = args[0]
+			resp = wacmd(cmd="set_target_freq", additional_params={"percent": freq})
 		elif cmd == "edevs":
 			resp = waro(cmd="edevs")
 		elif cmd == "get_psu":
