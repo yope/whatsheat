@@ -101,7 +101,7 @@ def main(args):
 	w = Whatsminer(token, passwd)
 	if command is None:
 		w.stats()
-	elif cmd == "psustats":
+	elif command == "psustats":
 		w.psustats()
 	else:
 		resp = w.run_command(command, cmdargs)
