@@ -51,9 +51,26 @@ class Whatsminer:
 
 	def stats(self):
 		s = self.run_command("summary")["SUMMARY"][0]
-		e = self.run_command("edevs")["DEVS"]
-		upfreq = ",".join([str(x["Upfreq Complete"]) for x in e])
-		print(f'Power: {s["Power_RT"]}W Voltage: {int(s["Voltage"])/1000:5.3f}V Fan speeds: {s["Fan Speed In"]}/{s["Fan Speed Out"]}rpm HR: {int(s["MHS av"])/1000000:4.1f}TH/s Temp: {s["Temperature"]}\u00b0C upfreq: {upfreq}')
+		try:
+			e = self.run_command("edevs")["DEVS"]
+		except KeyError:
+			print("Device not up yet")
+			upfreq = "0,0,0"
+		else:
+			upfreq = ",".join([str(x["Upfreq Complete"]) for x in e])
+		psu = self.run_command("get_psu")["Msg"]
+		vin = int(psu["vin"]) / 100
+		iin = int(psu["iin"]) / 1000
+		pw = int(vin * iin)
+		# pw = int(s["Power"])
+		hr = int(s["MHS av"]) / 1000000
+		if not "Voltage" in s:
+			s["Voltage"]=0.0
+		try:
+			eff = pw / hr
+		except ZeroDivisionError:
+			eff = 0
+		print(f'Power: {pw}W Voltage: {int(s["Voltage"])/1000:5.3f}V Fan speeds: {s["Fan Speed In"]}/{s["Fan Speed Out"]}rpm Freq: {s["freq_avg"]}MHz HR: {hr:4.1f}TH/s Eff: {eff:5.1f}J/Th Temp: {s["Temperature"]}\u00b0C upfreq: {upfreq}')
 
 	def psustats(self):
 		s = self.run_command("get_psu")["Msg"]
