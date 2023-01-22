@@ -38,7 +38,12 @@ class Whatsminer:
 		elif cmd == "edevs":
 			resp = waro(cmd="edevs")
 		elif cmd == "get_psu":
-			resp = waro(cmd="get_psu")
+			try:
+				resp = waro(cmd="get_psu")
+			except json.decoder.JSONDecodeError as err:
+				# print(repr(err))
+				s = err._raw_str_data
+				resp = json.loads(s.replace(",}", "}").replace('"1""', '"1","'))
 		else:
 			print(f"Error: Unknown command {cmd}")
 			return None
