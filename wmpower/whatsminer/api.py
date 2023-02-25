@@ -175,6 +175,8 @@ class WhatsminerAPI:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((access_token.ip_address, access_token.port))
             s.send(api_packet_str.encode())
+            if cmd == "power_off":
+                return None
             data = recv_all(s, 4000)
 
         try:
