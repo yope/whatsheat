@@ -55,6 +55,29 @@ class Whatsminer:
 			return None
 		return resp
 
+	def get_psu_stats(self):
+		psu = self.run_command("get_psu")["Msg"]
+		vin = int(psu["vin"]) / 100
+		iin = int(psu["iin"]) / 1000
+		fs = int(psu["fan_speed"])
+		pw = int(vin * iin)
+		return vin, iin, pw, fs
+
+	def get_summary_stats(self):
+		try:
+			s = self.run_command("summary")["SUMMARY"][0]
+		except KeyError:
+			return 0, 0, 0, 0, 0, 0
+		if not "Voltage" in s:
+			s["Voltage"]=0.0
+		hr = int(s["MHS av"]) / 1000000
+		voltage = int(s["Voltage"])/1000
+		fanin = int(s["Fan Speed In"])
+		fanout = int(s["Fan Speed Out"])
+		freq = int(s["freq_avg"])
+		temp = float(s["Temperature"])
+		return voltage, fanin, fanout, freq, hr, temp
+
 	def stats(self):
 		s = self.run_command("summary")["SUMMARY"][0]
 		try:
@@ -64,10 +87,7 @@ class Whatsminer:
 			upfreq = "0,0,0"
 		else:
 			upfreq = ",".join([str(x["Upfreq Complete"]) for x in e])
-		psu = self.run_command("get_psu")["Msg"]
-		vin = int(psu["vin"]) / 100
-		iin = int(psu["iin"]) / 1000
-		pw = int(vin * iin)
+		vin, iin, pw, _fs = self.get_psu_stats()
 		# pw = int(s["Power"])
 		hr = int(s["MHS av"]) / 1000000
 		if not "Voltage" in s:
@@ -79,11 +99,8 @@ class Whatsminer:
 		print(f'Power: {pw}W Voltage: {int(s["Voltage"])/1000:5.3f}V Fan speeds: {s["Fan Speed In"]}/{s["Fan Speed Out"]}rpm Freq: {s["freq_avg"]}MHz HR: {hr:4.1f}TH/s Eff: {eff:5.1f}J/Th Temp: {s["Temperature"]}\u00b0C upfreq: {upfreq}')
 
 	def psustats(self):
-		s = self.run_command("get_psu")["Msg"]
-		vin = int(s["vin"]) / 100
-		iin = int(s["iin"]) / 1000
-		pin = vin * iin
-		print(f'Vin: {vin:4.1f} Vac Iin: {iin/1000:4.3f} Aac Pin: {pin:5.1f} VA Fan speed: {s["fan_speed"]} rpm')
+		vin, iin, pin, fs = self.get_psu_stats()
+		print(f'Vin: {vin:4.1f} Vac Iin: {iin:4.3f} Aac Pin: {pin:5.1f} VA Fan speed: {fs} rpm')
 
 
 def main(args):
