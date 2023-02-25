@@ -6,6 +6,9 @@ import functools
 import json
 import inspect
 from whatsminer import WhatsminerAccessToken, WhatsminerAPI
+import gmqtt
+import socket
+import asyncio
 
 class Whatsminer:
 	def __init__(self, host, passwd):
@@ -102,6 +105,137 @@ class Whatsminer:
 		vin, iin, pin, fs = self.get_psu_stats()
 		print(f'Vin: {vin:4.1f} Vac Iin: {iin:4.3f} Aac Pin: {pin:5.1f} VA Fan speed: {fs} rpm')
 
+class HAMiner:
+	def __init__(self, whatsminer, mqtthost, mqttuser, mqttpass):
+		self._disconnected = asyncio.Event()
+		self.reconnect = True
+		self.retries = 3
+		self.hostname = socket.gethostname()
+		self.baseid = f"{self.hostname}_wmpower"
+		self.wm = whatsminer
+		self.topicbase = f"wmpower/{self.hostname}/whatsminer"
+		self.client = gmqtt.Client("clientid")
+		self.client.on_disconnect = self.mqtt_disconnect
+		self.client.on_message = self.mqtt_message
+		self.client.set_auth_credentials(mqttuser, mqttpass)
+		self.mqtthost = mqtthost
+
+	def mqtt_disconnect(self, client, packet, exc=None):
+		if self.retries <= 0:
+			self.reconnect = False
+		self._disconnected.set()
+
+	def mqtt_message(self, cient, topic, payload, qos, props):
+		print(f"MQTT RX topic:{topic}, payload:{payload!r}")
+		tparts = topic.split("/")
+		if tparts[-1] == "mining":
+			onoff = payload.decode("utf-8").lower()
+			if onoff not in ["on", "off"]:
+				print(f"Error, mining payload {onoff!r} not recognized!")
+				return
+			print("Set minig to:", payload.decode("utf-8"))
+			self.wm.run_command("power", [onoff])
+
+	async def run_async_timed(self, func, *args, timeout=5.0):
+		loop = asyncio.get_running_loop()
+		return await asyncio.wait_for(loop.run_in_executor(None, func, *args), timeout)
+
+	async def get_psu_stats(self):
+		try:
+			return await self.run_async_timed(self.wm.get_psu_stats)
+		except (TimeoutError, OSError, asyncio.exceptions.TimeoutError):
+			print("WM timeout in get_psu_stats")
+			self.wm.set_offline()
+			return 0, 0, 0, 0
+
+	async def get_summary_stats(self):
+		try:
+			return await self.run_async_timed(self.wm.get_summary_stats)
+		except (TimeoutError, OSError, asyncio.exceptions.TimeoutError):
+			print("WM timeout in get_summary_stats")
+			self.wm.set_offline()
+			return 0, 0, 0, 0, 0, 0
+
+	async def shutdown(self):
+		self.reconnect = False
+		await self.client.disconnect()
+
+	async def run(self):
+		while True:
+			self._disconnected.clear()
+			if not self.reconnect:
+				break
+			print("MQTT: Connecting...")
+			await self.client.connect(self.mqtthost)
+			self.client.subscribe([
+				gmqtt.Subscription(f"{self.topicbase}/#", qos=1)
+			])
+			self.ha_config()
+			await self.coro_connection()
+			self.retries -= 1
+			if self.retries <= 0:
+				self.reconnect = False
+
+	async def coro_connection(self):
+		print("MQTT: Connected, processing messages")
+		while not self._disconnected.is_set():
+			vin, iin, pin, fs = await self.get_psu_stats()
+			voltage, fanin, fanout, freq, hr, temp = await self.get_summary_stats()
+			if temp > 0:
+				self.client.publish(f"{self.topicbase}/SENSOR", {
+					"VoltageIn": vin,
+					"CurrentIn": iin,
+					"Power": pin,
+					"PSUFanSpeed": fs,
+					"InputFanSpeed": fanin,
+					"OuputFanSpeed": fanout,
+					"VoltageChip": voltage,
+					"Frequency": freq,
+					"HashRate": hr,
+					"Temperature": temp
+				}, qos=1, content_type='json')
+			minerstate = "ON" if pin > 300 else "OFF"
+			self.client.publish(f"{self.topicbase}/state", minerstate, qos=1, content_type='utf-8')
+			await asyncio.sleep(10)
+
+	def ha_config(self):
+		self.client.publish(f"homeassistant/switch/{self.baseid}S/config", {
+			"name": "Whatsminer mining",
+			"object_id": "whatsminer_mining_switch",
+			"unique_id": f"{self.baseid}S",
+			"~": self.topicbase,
+			"cmd_t": "~/mining",
+			"stat_t": "~/state",
+		}, qos=1, content_type='json')
+		self.client.publish(f"homeassistant/sensor/{self.baseid}T/config", {
+			"name": "Whatsminer temperature",
+			"object_id": "whatsminer_temperature",
+			"unique_id": f"{self.baseid}T",
+			"~": self.topicbase,
+			"stat_t": "~/SENSOR",
+			"unit_of_measurement": "°C",
+			"device_class": "temperature",
+			"value_template": "{{ value_json.Temperature}}"
+		}, qos=1, content_type='json')
+		self.client.publish(f"homeassistant/sensor/{self.baseid}P/config", {
+			"name": "Whatsminer power",
+			"object_id": "whatsminer_power",
+			"unique_id": f"{self.baseid}P",
+			"~": self.topicbase,
+			"stat_t": "~/SENSOR",
+			"unit_of_measurement": "W",
+			"device_class": "power",
+			"value_template": "{{ value_json.Power}}"
+		}, qos=1, content_type='json')
+		self.client.publish(f"homeassistant/sensor/{self.baseid}HR/config", {
+			"name": "Whatsminer hash rate",
+			"object_id": "whatsminer_hashrate",
+			"unique_id": f"{self.baseid}HR",
+			"~": self.topicbase,
+			"stat_t": "~/SENSOR",
+			"unit_of_measurement": "TH/s",
+			"value_template": "{{ value_json.HashRate}}"
+		}, qos=1, content_type='json')
 
 def main(args):
 	"""
@@ -111,7 +245,14 @@ def main(args):
 	Options:
 		-h <host>       : Specify hostname/ip-address of miner
 		-p <password>   : Admin password, needed only for non read-only commands
+		-m <mqtthost>   : Start MQTT client connected to <mqtthost>
+		-u <mqttuser>   : Specify the user or token to authenticate to MQTT broker
+		-w <mqttpasswd> : Specify optional MQTT broker password
 		--help          : Display this help text
+
+	Environment Variables to avoid leaking credentials to the command line:
+		WMPOWER_PASSWD  : Admin password.
+		WMPOWER_MQTTUSER, WMPOWER_MQTTPASSWD : Likewise for MQTT broker access.
 
 	Commands:
 		stats           : Display one-line status of miner (default if command omitted)
@@ -124,9 +265,12 @@ def main(args):
 		get_psu         : Print PSU status in json format
 	"""
 	host = None
-	passwd = None
+	passwd = os.environ.get("WMPOWER_PASSWD", None)
 	command = None
 	resp = None
+	mqtthost = None
+	mqttuser = os.environ.get("WMPOWER_MQTTUSER", None)
+	mqttpasswd = os.environ.get("WMPOWER_MQTTPASSWD", None)
 	cmdargs = []
 	while args:
 		a = args.pop(0)
@@ -134,6 +278,12 @@ def main(args):
 			host = args.pop(0)
 		elif a == "-p":
 			passwd = args.pop(0)
+		elif a == "-m":
+			mqtthost = args.pop(0)
+		elif a == "-u":
+			mqttuser = args.pop(0)
+		elif a == "-w":
+			mqttpasswd = args.pop(0)
 		elif a == "--help":
 			print(inspect.cleandoc(main.__doc__))
 			return 0
@@ -146,7 +296,10 @@ def main(args):
 		print(inspect.cleandoc(main.__doc__))
 		return 1
 	w = Whatsminer(host, passwd)
-	if command is None:
+	if mqtthost is not None:
+		haminer = HAMiner(w, mqtthost, mqttuser, mqttpasswd)
+		asyncio.run(haminer.run())
+	elif command is None:
 		w.stats()
 	elif command == "psustats":
 		w.psustats()
