@@ -136,17 +136,14 @@ class WhatsminerAPI:
             s.send(json.dumps(json_cmd).encode('utf-8'))
             data = recv_all(s, 4000)
 
+        s = data.decode()
+
+        # Try to patch some known JSON formatting errors
         try:
-            return json.loads(data.decode())
-        except Exception as e:
-            logging.exception("Error calling read-only endpoint")
-            try:
-                logging.error(data.decode())
-            except:
-                pass
-
-            raise e
-
+            ret = json.loads(s)
+        except json.decoder.JSONDecodeError:
+            ret = json.loads(s.replace(",}", "}").replace('"1""', '"1","'))
+        return ret
 
     @classmethod
     def exec_command(self, access_token: WhatsminerAccessToken, cmd: str, additional_params: dict = None):
