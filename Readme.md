@@ -48,10 +48,12 @@ less than 1600W and producing around 38TH/s on average. This is amounts to
 around 42J/Th efficiency. Not bad for a regular M31S!
 
 This repository contains a small python tool that uses the python whatsminer API
-to do some simple power control. To use it, you need to install the latest
-version of the python whatsminer API library first:
-
- $ pip install whatsminer
+to do some simple power control. It also has an option to specify an MQTT server
+IP address as well as simple MQTT access credentials. If an MQTT host is
+specified on the command line, the tool will start in daemon mode, publish
+Home Assistant auto configuration messages and start monitoring and polling the
+miner for data every 10 seconds. A switch in Home Assistant can be used to
+power on or off the miner.
 
 See the help for more information on what this tool can do:
 
