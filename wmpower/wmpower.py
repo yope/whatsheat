@@ -8,12 +8,23 @@ import inspect
 from whatsminer import WhatsminerAccessToken, WhatsminerAPI
 
 class Whatsminer:
-	def __init__(self, token, passwd):
-		self.token = token
-		if passwd is not None:
-			self.token.enable_write_access(admin_password=passwd)
+	def __init__(self, host, passwd):
+		self.passwd = passwd
+		self.host = host
+		self.online = False
+
+	def connect(self):
+		self.token = WhatsminerAccessToken(ip_address=self.host)
+		if self.passwd is not None:
+			self.token.enable_write_access(admin_password=self.passwd)
+		self.online = True
+
+	def set_offline(self):
+		self.online = False
 
 	def run_command(self, cmd, args=None):
+		if not self.online:
+			self.connect()
 		wacmd = functools.partial(WhatsminerAPI.exec_command, access_token=self.token)
 		waro = functools.partial(WhatsminerAPI.get_read_only_info, access_token=self.token)
 		if cmd == "power":
@@ -117,8 +128,7 @@ def main(args):
 		print("Error must provide hostname/ip-address")
 		print(inspect.cleandoc(main.__doc__))
 		return 1
-	token = WhatsminerAccessToken(ip_address=host)
-	w = Whatsminer(token, passwd)
+	w = Whatsminer(host, passwd)
 	if command is None:
 		w.stats()
 	elif command == "psustats":
