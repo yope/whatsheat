@@ -108,7 +108,7 @@ class WhatsminerAccessToken:
 
         if (datetime.datetime.now() - self.created).total_seconds() > 30 * 60:
             # writeable token has expired; reinitialize
-            self._initialize_write_access(self._admin_password)
+            self._initialize_write_access()
 
         return True
 
