@@ -1,3 +1,6 @@
+
+from mqtt_as import MQTTClient
+from mqtt_local import config
 from machine import Pin, I2C, ADC
 import rp2
 from ssd1306 import SSD1306_I2C
@@ -19,6 +22,7 @@ def PIO_counter():
 	wait(0, pin, 0)
 	jmp(x_dec, 'inner')
 	wrap()
+
 
 class FreqCounter:
 	def __init__(self, npin):
@@ -144,6 +148,8 @@ class Application:
 	def __init__(self):
 		self.ui = UI()
 		self.fc = FreqCounter(2)
+		config["queue_len"] = 1 # MQTT Event interface
+		self.mqtt = MQTTClient(config)
 		self.temp_df = 0
 		self.temp_w = 0
 		self.flow_df = 0
@@ -193,6 +199,11 @@ class Application:
 		loop = asyncio.get_event_loop()
 		loop.set_exception_handler(self.handle_exception)
 		await self.ui.coro_init(loop)
+		print("Connecting to WiFi and broker...")
+		await self.mqtt.connect()
+		asyncio.create_task(self.mqtt_up())
+		asyncio.create_task(self.mqtt_down())
+		asyncio.create_task(self.mqtt_messages())
 		cnt = 0
 		adc = ADC(27)
 		acc = 0
@@ -208,10 +219,28 @@ class Application:
 				self.screen_main_redraw()
 			await asyncio.sleep(0.1)
 
+	async def mqtt_up(self):
+		while True:
+			await self.mqtt.up.wait()
+			self.mqtt.up.clear()
+			print('Connected to broker. Subscribing...')
+			await self.mqtt.subscribe("wmpower/#", 1)
+
+	async def mqtt_down(self):
+		while True:
+			await self.mqtt.down.wait()
+			self.mqtt.down.clear()
+			print('Connection to broker failed')
+
+	async def mqtt_messages(self):
+		async for topic, msg, retained in self.mqtt.queue:
+			print(f"MQTT topic: {topic.decode()} message: {msg.decode()}")
+
 	def run(self):
 		try:
 			asyncio.run(self.main())
 		finally:
+			self.mqtt.close()
 			asyncio.new_event_loop()
 
 if __name__ == "__main__":
