@@ -9,6 +9,9 @@ import uasyncio as asyncio
 import sys
 import math
 from time import ticks_ms
+import json
+import ubinascii
+
 def adc2celsius(adc, R25=50000, BETA=3950):
 	if adc <= 1:
 		return 0
@@ -156,10 +159,16 @@ class Application:
 	def __init__(self):
 		self.ui = UI()
 		self.fc = FreqCounter(2)
+		self.hostname = ubinascii.hexlify(machine.unique_id()).decode('utf-8')
+		self.baseid = f"{self.hostname}_whatsheat"
+		self.topicbase = f"whatsheat/{self.hostname}/pico"
+		self.state_topic_w = f"{self.topicbase}/WSTATE"
+		self.state_topic_c = f"{self.topicbase}/CSTATE"
+		self.sensor_topic = f"{self.topicbase}/SENSOR"
 		config["queue_len"] = 1 # MQTT Event interface
 		self.mqtt = MQTTClient(config)
-		self.temp_df = 0
-		self.temp_w = 0
+		self.temp_in = 0
+		self.temp_out = 0
 		self.flow_df = 0
 		self.pump_df_on = False
 		self.pump_w_on = False
@@ -173,8 +182,8 @@ class Application:
 		self.ui.btn_selected = 0
 
 	def screen_main_redraw(self):
-		self.ui.text(f"Df: {self.temp_df:4.1f} C", 1, False)
-		self.ui.text(f"W:  {self.temp_w:4.1f} C", 2, False)
+		self.ui.text(f"Ti: {self.temp_in:4.1f} C", 1, False)
+		self.ui.text(f"To: {self.temp_out:4.1f} C", 2, False)
 		self.ui.text(f"fr: {self.flow_df:4.1f} lpm", 3)
 
 	def btn_start(self):
@@ -183,13 +192,19 @@ class Application:
 	def btn_stop(self):
 		print("Stop system")
 
+	def _set_coolantpump(self, val):
+		self.pump_df_on = val
+		self._set_btn_on_off(1, self.pump_df_on)
+
+	def _set_waterpump(self, val):
+		self.pump_w_on = val
+		self._set_btn_on_off(2, self.pump_w_on)
+
 	def btn_pump_df(self):
-		self.pump_df_on = not self.pump_df_on
-		self._set_btn_on_off(2, self.pump_df_on)
+		self._set_coolantpump(not self.pump_df_on)
 
 	def btn_pump_w(self):
-		self.pump_w_on = not self.pump_w_on
-		self._set_btn_on_off(3, self.pump_w_on)
+		self._set_waterpump(not self.pump_w_on)
 
 	def btn_next(self):
 		print("Next screen")
@@ -232,7 +247,53 @@ class Application:
 			await self.mqtt.up.wait()
 			self.mqtt.up.clear()
 			print('Connected to broker. Subscribing...')
-			await self.mqtt.subscribe("wmpower/#", 1)
+			await self.mqtt.subscribe("whatsheat/#", 1)
+			await self.mqtt_pub(f"homeassistant/switch/{self.baseid}S1/config", {
+				"name": "Whatsheat water pump",
+				"object_id": "whatsheat_water_pump",
+				"unique_id": f"{self.baseid}S1",
+				"~": self.topicbase,
+				"cmd_t": "~/waterpump",
+				"stat_t": "~/WSTATE",
+			}, qos=1, content_type='json')
+			await self.mqtt_pub(f"homeassistant/switch/{self.baseid}S2/config", {
+				"name": "Whatsheat coolant pump",
+				"object_id": "whatsheat_coolant_pump",
+				"unique_id": f"{self.baseid}S2",
+				"~": self.topicbase,
+				"cmd_t": "~/coolantpump",
+				"stat_t": "~/CSTATE",
+			}, qos=1, content_type='json')
+			await self.mqtt_pub(f"homeassistant/sensor/{self.baseid}T1/config", {
+				"name": "Whatsheat inlet temperature",
+				"object_id": "whatsheat_inlet_temp",
+				"unique_id": f"{self.baseid}T1",
+				"~": self.topicbase,
+				"stat_t": "~/SENSOR",
+				"unit_of_measurement": "°C",
+				"device_class": "temperature",
+				"value_template": "{{ value_json.InletTemperature}}"
+			}, qos=1, content_type='json')
+			await self.mqtt_pub(f"homeassistant/sensor/{self.baseid}T2/config", {
+				"name": "Whatsheat outlet temperature",
+				"object_id": "whatsheat_outlet_temp",
+				"unique_id": f"{self.baseid}T2",
+				"~": self.topicbase,
+				"stat_t": "~/SENSOR",
+				"unit_of_measurement": "°C",
+				"device_class": "temperature",
+				"value_template": "{{ value_json.OutletTemperature}}"
+			}, qos=1, content_type='json')
+			await self.mqtt_pub(f"homeassistant/sensor/{self.baseid}FR1/config", {
+				"name": "Whatsheat coolant flow rate",
+				"object_id": "whatsheat_coolant_flow",
+				"unique_id": f"{self.baseid}FR1",
+				"~": self.topicbase,
+				"stat_t": "~/SENSOR",
+				"unit_of_measurement": "l/min",
+				"device_class": "flow",
+				"value_template": "{{ value_json.CoolantFlow}}"
+			}, qos=1, content_type='json')
 
 	async def mqtt_down(self):
 		while True:
@@ -243,6 +304,17 @@ class Application:
 	async def mqtt_messages(self):
 		async for topic, msg, retained in self.mqtt.queue:
 			print(f"MQTT topic: {topic.decode()} message: {msg.decode()}")
+			if topic.endswith("coolantpump"):
+				self._set_coolantpump(msg.decode().upper() == "ON")
+			if topic.endswith("waterpump"):
+				self._set_waterpump(msg.decode().upper() == "ON")
+
+	async def mqtt_pub(self, topic, msg, retain=False, qos=0, content_type='text'):
+		self.set_status(2, "P")
+		if content_type == 'json':
+			msg = json.dumps(msg).encode("utf-8")
+		await self.mqtt.publish(topic, msg, retain=retain, qos=qos)
+		self.set_status(2, ".")
 
 	def run(self):
 		try:
