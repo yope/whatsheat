@@ -159,6 +159,7 @@ class Application:
 	def __init__(self):
 		self.ui = UI()
 		self.fc = FreqCounter(2)
+		self.status_sym = [".", ".", "."]
 		self.hostname = ubinascii.hexlify(machine.unique_id()).decode('utf-8')
 		self.baseid = f"{self.hostname}_whatsheat"
 		self.topicbase = f"whatsheat/{self.hostname}/pico"
@@ -179,15 +180,20 @@ class Application:
 			Pin(9, Pin.OUT, value=0)
 		]
 
+	def set_status(self, idx, s, redraw=True):
+		self.status_sym[idx] = s
+		if redraw:
+			self.ui.text("".join(self.status_sym), 0, True)
+
 	def screen_main_setup(self):
-		self.ui.button(8, 0, "start", self.btn_start)
-		self.ui.button(80, 0, "stop", self.btn_stop)
+		self.ui.button(80, 0, "start", self.btn_start)
 		self.ui.button(96, 8, "off", self.btn_pump_df)
 		self.ui.button(96, 16, "off", self.btn_pump_w)
 		self.ui.button(104, 24, "->", self.btn_next)
 		self.ui.btn_selected = 0
 
 	def screen_main_redraw(self):
+		self.ui.text("".join(self.status_sym), 0, False)
 		self.ui.text(f"Ti: {self.temp_in:4.1f} C", 1, False)
 		self.ui.text(f"To: {self.temp_out:4.1f} C", 2, False)
 		self.ui.text(f"fr: {self.flow_df:4.1f} lpm", 3)
@@ -253,6 +259,7 @@ class Application:
 	async def mqtt_up(self):
 		while True:
 			await self.mqtt.up.wait()
+			self.set_status(1, "M")
 			self.mqtt.up.clear()
 			print('Connected to broker. Subscribing...')
 			await self.mqtt.subscribe("whatsheat/#", 1)
@@ -306,6 +313,7 @@ class Application:
 	async def mqtt_down(self):
 		while True:
 			await self.mqtt.down.wait()
+			self.set_status(1, ".")
 			self.mqtt.down.clear()
 			print('Connection to broker failed')
 
