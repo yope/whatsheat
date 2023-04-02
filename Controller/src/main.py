@@ -9,9 +9,17 @@ import uasyncio as asyncio
 import sys
 import math
 from time import ticks_ms
-
-def adc2celsius(adc):
-	return (1 / (math.log(1/(65535/adc - 1))/3950 + 1/298.15) - 273.15)
+def adc2celsius(adc, R25=50000, BETA=3950):
+	if adc <= 1:
+		return 0
+	R1 = 100000
+	Rt = 65535 / adc - 1
+	if Rt <= 0:
+		return 0
+	v = math.log(R1 / Rt / R25) / BETA + 1.0 / 298.15
+	if v == 0:
+		return 0
+	return 1 / v - 273.15
 
 @rp2.asm_pio()
 def PIO_counter():
