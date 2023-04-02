@@ -22,6 +22,8 @@ module walls() {
                 }
             }
         }
+        translate([77.2, 0, -height / 2 + 1.2])
+            cube([20, 141, 4], center=true);
     }
 }
 
