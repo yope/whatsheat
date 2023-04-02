@@ -29,20 +29,20 @@ module spacer() {
     difference() {
         union() {
             translate([0, 0, 6 - zoff]) {
-                cube([8, 135, 12], center=true);
-                cube([135, 8, 12], center=true);
+                cube([8, 134, 12], center=true);
+                cube([134, 8, 12], center=true);
             }
             translate([0, 0, -zoff]) {
-                cylinder(h = 2, d = 60);
+                cylinder(h = 4, d = 62);
                 translate([0, 0, 1.5])
-                    cylinder(h = height - 5, d1 = 3, d2 = 62);
+                    cylinder(h = height - 15, d1 = 3, d2 = 52);
             }
         }
         translate([0, 0, -zoffd-1]) {
-            cylinder(h = 7, d = 50);
+            cylinder(h = 7, d = 52);
         }
         translate([0, 0, 4.5-zoffd]) {
-            cylinder(h = height - 5, d1 = 3, d2 = 62);
+            cylinder(h = height - 15, d1 = 3, d2 = 52);
         }
         cube([3, 125, height - 4], center=true);
         cube([125, 3, height - 4], center=true);
