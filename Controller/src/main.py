@@ -172,6 +172,12 @@ class Application:
 		self.flow_df = 0
 		self.pump_df_on = False
 		self.pump_w_on = False
+		self.relays = [
+			Pin(6, Pin.OUT, value=0),
+			Pin(7, Pin.OUT, value=0),
+			Pin(8, Pin.OUT, value=0),
+			Pin(9, Pin.OUT, value=0)
+		]
 
 	def screen_main_setup(self):
 		self.ui.button(8, 0, "start", self.btn_start)
@@ -194,10 +200,12 @@ class Application:
 
 	def _set_coolantpump(self, val):
 		self.pump_df_on = val
+		self.relays[0].value(int(self.pump_df_on))
 		self._set_btn_on_off(1, self.pump_df_on)
 
 	def _set_waterpump(self, val):
 		self.pump_w_on = val
+		self.relays[1].value(int(self.pump_w_on))
 		self._set_btn_on_off(2, self.pump_w_on)
 
 	def btn_pump_df(self):
