@@ -236,25 +236,63 @@ class Application:
 		loop = asyncio.get_event_loop()
 		loop.set_exception_handler(self.handle_exception)
 		await self.ui.coro_init(loop)
-		print("Connecting to WiFi and broker...")
+		self.ui.text("Booting...", 0, True)
+		asyncio.create_task(self.mqtt_main())
+		cnt = 0
+		adc0 = ADC(26)
+		adc1 = ADC(27)
+		acc0 = 0
+		acc1 = 0
+		flow = 0.0
+		self.screen_main_setup()
+		while True:
+			acc0 += adc0.read_u16()
+			acc1 += adc1.read_u16()
+			cnt += 1
+			if cnt >= 10:
+				self.temp_out = adc2celsius(acc0 / cnt, R25=10000)
+				self.temp_in = adc2celsius(acc1 / cnt, R25=50000)
+				self.flow_df = self.fc.read() / 6.6
+				cnt = acc0 = acc1 = 0
+				self.screen_main_redraw()
+			await asyncio.sleep(0.1)
+
+	async def mqtt_main(self):
 		await self.mqtt.connect()
 		asyncio.create_task(self.mqtt_up())
 		asyncio.create_task(self.mqtt_down())
 		asyncio.create_task(self.mqtt_messages())
-		cnt = 0
-		adc = ADC(27)
-		acc = 0
-		flow = 0.0
-		self.screen_main_setup()
+		tss0 = 0
+		tst0 = 0
+		temp_out0 = 0.0
+		temp_in0 = 0.0
+		fr0 = 0.0
+		pdf0 = None
+		pw0 = None
 		while True:
-			acc += adc2celsius(adc.read_u16())
-			cnt += 1
-			if cnt >= 10:
-				self.temp_df = acc / cnt
-				self.flow_df = self.fc.read() / 6.6
-				cnt = acc = 0
-				self.screen_main_redraw()
-			await asyncio.sleep(0.1)
+			await asyncio.sleep(1)
+			ts = ticks_ms()
+			dts = ts - tss0
+			dtt = ts - tst0
+			dtout = abs(temp_out0 - self.temp_out)
+			dtin = abs(temp_in0 - self.temp_in)
+			dfr = abs(fr0 - self.flow_df)
+			if dts > 30000 or dtout > 0.2 or dtin > 0.2 or dfr > 0.2:
+				tss0 = ts
+				fr0 = self.flow_df
+				temp_out0 = self.temp_out
+				temp_in0 = self.temp_in
+				await self.mqtt_pub(self.sensor_topic, json.dumps({
+					"CoolantFlow": fr0, "InletTemperature": temp_in0,
+					"OutletTemperature": temp_out0
+				}))
+			if dtt > 30000 or (pdf0 != self.pump_df_on) or (pw0 != self.pump_w_on):
+				tst0 = ts
+				pdf0 = self.pump_df_on
+				pw0 = self.pump_w_on
+				await self.mqtt_pub(self.state_topic_c, "ON" if pdf0 else "OFF")
+				await self.mqtt_pub(self.state_topic_w, "ON" if pw0 else "OFF")
+
 
 	async def mqtt_up(self):
 		while True:
