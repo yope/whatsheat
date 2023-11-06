@@ -292,8 +292,8 @@ class Application:
 				temp_out0 = self.temp_out
 				temp_in0 = self.temp_in
 				await self.mqtt_pub(self.sensor_topic, json.dumps({
-					"CoolantFlow": fr0, "InletTemperature": temp_in0,
-					"OutletTemperature": temp_out0
+					"CoolantFlow": round(fr0, 2), "InletTemperature": round(temp_in0, 2),
+					"OutletTemperature": round(temp_out0, 2)
 				}))
 			if dtt > 30000 or (pdf0 != self.pump_df_on) or (pw0 != self.pump_w_on):
 				tst0 = ts
@@ -301,7 +301,6 @@ class Application:
 				pw0 = self.pump_w_on
 				await self.mqtt_pub(self.state_topic_c, "ON" if pdf0 else "OFF")
 				await self.mqtt_pub(self.state_topic_w, "ON" if pw0 else "OFF")
-
 
 	async def mqtt_up(self):
 		while True:
