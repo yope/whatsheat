@@ -59,6 +59,6 @@ See the help for more information on what this tool can do:
 
  $ ./wmpower/wmpower.py --help
 
-### 3. Immersion cooling setup
+### 4. Immersion cooling setup
 
 [TODO]
