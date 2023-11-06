@@ -166,7 +166,12 @@ class HAMiner:
 			if not self.reconnect:
 				break
 			print("MQTT: Connecting...")
-			await self.client.connect(self.mqtthost)
+			try:
+				await self.client.connect(self.mqtthost)
+			except ConnectionRefusedError:
+				print("MQTT: Connection refused... retrying in 20 seconds.")
+				await asyncio.sleep(20)
+				continue
 			self.client.subscribe([
 				gmqtt.Subscription(f"{self.topicbase}/#", qos=1)
 			])
