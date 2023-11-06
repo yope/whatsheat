@@ -16,7 +16,7 @@ import select
 import socket
 
 from base64 import b64encode, b64decode
-from Crypto.Cipher import AES
+from Cryptodome.Cipher import AES
 from passlib.hash import md5_crypt
 
 logger = logging.getLogger(__name__)
