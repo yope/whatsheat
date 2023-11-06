@@ -160,6 +160,8 @@ class Application:
 		self.ui = UI()
 		self.fc = FreqCounter(2)
 		self.status_sym = [".", ".", "."]
+		self.spin = '.oOo'
+		self.spin_idx = 0
 		self.hostname = ubinascii.hexlify(machine.unique_id()).decode('utf-8')
 		self.baseid = f"{self.hostname}_whatsheat"
 		self.topicbase = f"whatsheat/{self.hostname}/pico"
@@ -179,6 +181,12 @@ class Application:
 			Pin(8, Pin.OUT, value=0),
 			Pin(9, Pin.OUT, value=0)
 		]
+
+	def status_spin(self):
+		self.set_status(0, self.spin[self.spin_idx])
+		self.spin_idx += 1
+		if self.spin_idx >= len(self.spin):
+			self.spin_idx = 0
 
 	def set_status(self, idx, s, redraw=True):
 		self.status_sym[idx] = s
@@ -254,6 +262,7 @@ class Application:
 				self.temp_in = adc2celsius(acc1 / cnt, R25=50000)
 				self.flow_df = self.fc.read() / 6.6
 				cnt = acc0 = acc1 = 0
+				self.status_spin()
 				self.screen_main_redraw()
 			await asyncio.sleep(0.1)
 
