@@ -4,6 +4,10 @@ import gmqtt
 import json
 import uuid
 from collections import deque
+import aiohttp
+import os
+from datetime import datetime
+from time import time
 from logging import debug, info, warning, error
 
 class HABase:
@@ -114,6 +118,12 @@ class HomeAssistant:
 		self.client.on_message = self._mqtt_message
 		self.client.on_disconnect = self._mqtt_disconnect
 		self.client.on_subscribe = self._mqtt_subscribe
+		if os.path.exists("home_assistant.token"):
+			with open("home_assistant.token", "r") as f:
+				self.ha_token = f.read().strip(" \r\n")
+		else:
+			self.ha_token = ""
+			warning("HA: WARN: file 'home_assistant.token' not found. Please create a long lives access token.")
 
 	def _mqtt_connect(self, c, flags, rc, properties):
 		info("HA MQTT: Connected")
@@ -222,3 +232,31 @@ class HomeAssistant:
 	def create_volume_sensor(self, objid, name):
 		return self._create_sensor(objid, name, HAVolumeSensor, "V")
 
+	async def restapi_get(self, url):
+		baseurl = f"http://{self.mqttserver}:8123"
+		url = f"/api/{url}"
+		headers = {
+			"Authorization": f"Bearer {self.ha_token}",
+			"content-type": "application/json",
+		}
+		ret = None
+		async with aiohttp.ClientSession(baseurl, headers=headers) as session:
+			async with session.get(url) as resp:
+				ret = await resp.json()
+		return ret
+
+	async def get_sensor_state_and_timestamp(self, objid):
+		obj = await self.restapi_get(f"states/sensor.{objid}")
+		try:
+			state = obj["state"]
+			lupd = obj["last_updated"]
+		except KeyError:
+			error(f"HA Error: Sensor {objid} dos not exist?")
+			return None, None
+		try:
+			state = float(state)
+		except ValueError:
+			error(f"HA Error: Sensor {objid} state is non numeric.")
+			return None, None
+		ts = datetime.fromisoformat(lupd)
+		return state, ts.timestamp()
