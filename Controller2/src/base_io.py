@@ -4,6 +4,7 @@ from time import monotonic
 import asyncio
 import os
 import math
+from logging import debug, info, warning, error
 
 # Output GPIO names mapping:
 outputs = {
@@ -36,6 +37,7 @@ class Relay:
 		for chip in gpiod.ChipIter():
 			l = chip.find_line(gpioname)
 			if l is not None:
+				debug(f"Found pin {gpioname} on chip {chip!r}")
 				break
 		self.gpio = l
 		self.gpio.request("kachel")
