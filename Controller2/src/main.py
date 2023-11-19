@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from logging import debug, info, warning, error
+import logging
 import asyncio
 import base_io
 import ha
@@ -103,13 +105,26 @@ def main(args):
 		KACHEL_MQTTUSER, KACHEL_MQTTPASSWD : Likewise for MQTT broker access.
 	"""
 	mqtthost = None
+	debug = False
+	verbose = False
 	while args:
 		a = args.pop(0)
 		if a == "-h":
 			mqtthost = args.pop(0)
+		elif a == "-v":
+			verbose = True
+		elif a == "-d":
+			debug = True
 		elif a == "--help":
 			print(inspect.cleandoc(main.__doc__))
 			return 0
+	if debug:
+		loglevel = logging.DEBUG
+	elif verbose:
+		loglevel = logging.INFO
+	else:
+		loglevel = logging.WARNING
+	logging.basicConfig(level=loglevel)
 	if mqtthost is None:
 		print("ERROR: Use --help for usage.")
 		return -1

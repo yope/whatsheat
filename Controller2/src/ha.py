@@ -4,6 +4,7 @@ import gmqtt
 import json
 import uuid
 from collections import deque
+from logging import debug, info, warning, error
 
 class HABase:
 	def __init__(self, ha, uid, objid, name):
@@ -44,7 +45,7 @@ class HASwitch(HABase):
 
 	def mqtt_message(self, msg):
 		if self.handler == None:
-			print(f"HA Switch: no handler for message: {msg!r}")
+			warning(f"HA Switch: no handler for message: {msg!r}")
 			return
 		if msg.lower() == "on":
 			self.handler(1)
@@ -53,7 +54,7 @@ class HASwitch(HABase):
 			self.handler(0)
 			self.mqtt_state(0)
 		else:
-			print(f"HA Switch ERROR: Don't understand message: {msg!r}")
+			error(f"HA Switch ERROR: Don't understand message: {msg!r}")
 
 	def add_handler(self, h):
 		self.handler = h
@@ -115,16 +116,16 @@ class HomeAssistant:
 		self.client.on_subscribe = self._mqtt_subscribe
 
 	def _mqtt_connect(self, c, flags, rc, properties):
-		print("HA MQTT: Connected")
+		info("HA MQTT: Connected")
 		self.ev_disconnect.clear()
 		for topic in self.subscriptions:
 			self.client.subscribe(topic, qos=1)
-		print("HA MQTT: Subscribed")
+		debug("HA MQTT: Subscribed")
 		for s in self.switches.values():
 			s.mqtt_connect()
 		for s in self.sensors.values():
 			s.mqtt_connect()
-		print("HA MQTT: Config sent")
+		debug("HA MQTT: Config sent")
 
 	def subscribe(self, topic, handler, fmt="json"):
 		self.subscriptions[topic] = (handler, fmt)
@@ -133,7 +134,7 @@ class HomeAssistant:
 
 	def _mqtt_disconnect(self, c, packet, exc=None):
 		self.ev_disconnect.set()
-		print("HA MQTT: Disconnected")
+		info("HA MQTT: Disconnected")
 		for s in self.switches.values():
 			s.mqtt_disconnect()
 		for s in self.sensors.values():
@@ -144,13 +145,13 @@ class HomeAssistant:
 			try:
 				payload = json.loads(payload)
 			except json.JSONDecodeError:
-				print(f"HA MQTT ERROR: payload not json format: {payload!r}")
+				error(f"HA MQTT ERROR: payload not json format: {payload!r}")
 				return
 		elif fmt == "utf-8" or fmt == "ascii" or fmt == "iso8859-1":
 			try:
 				payload = payload.decode(fmt)
 			except DecodeError:
-				print(f"HA MQTT ERROR: payload not in {fmt!r} format: {payload!r}")
+				error(f"HA MQTT ERROR: payload not in {fmt!r} format: {payload!r}")
 				return
 		h(payload)
 
@@ -169,7 +170,7 @@ class HomeAssistant:
 				self._call_topic_handler(h, fmt, payload)
 				handled = True
 		if not handled:
-			print(f"HA MQTT: Unhandled message topic {topic!r}: {payload!r}")
+			warning(f"HA MQTT: Unhandled message topic {topic!r}: {payload!r}")
 
 	def _mqtt_subscribe(self, c, mid, qos, properties):
 		pass
@@ -197,7 +198,7 @@ class HomeAssistant:
 
 	def create_switch(self, objid, name, state):
 		if objid in self.switches:
-			print(f"HA MQTT ERROR: Switch id {objid} already exists!")
+			error(f"HA MQTT ERROR: Switch id {objid} already exists!")
 			raise ValueError
 		num = len(self.switches)
 		uid = self.baseid + f"SW{num}"
@@ -207,7 +208,7 @@ class HomeAssistant:
 
 	def _create_sensor(self, objid, name, cls, letter):
 		if objid in self.sensors:
-			print(f"HA MQTT ERROR: Sensor id {objid} already exists!")
+			error(f"HA MQTT ERROR: Sensor id {objid} already exists!")
 			raise ValueError
 		num = len(self.sensors)
 		uid = self.baseid + f"{letter}{num}"
