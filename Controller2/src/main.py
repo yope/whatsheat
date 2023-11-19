@@ -8,7 +8,30 @@ import ha
 import os
 import sys
 import inspect
-from time import monotonic
+from time import monotonic, time
+from dataclasses import dataclass, field, asdict
+from pprint import pformat
+
+def dfield(mutable):
+	return field(default_factory=lambda :mutable)
+
+@dataclass
+class SensorData:
+	name: str
+	ha_objid: str | None = None
+	state: float = 0.0
+	ts: float = 0.0
+	online: bool = False
+
+@dataclass
+class Sensors:
+	cvpower: SensorData = dfield(SensorData("CV mains power", "intergas_power"))
+	tzone0: SensorData = dfield(SensorData("Temperature Living", "temperature_26"))
+	tzone1: SensorData = dfield(SensorData("Temperature Zolder", "temperature_11"))
+	pvpower: SensorData = dfield(SensorData("PV power output", "solaredge_i1_ac_power"))
+	wmpower: SensorData = dfield(SensorData("Whatsminer Power"))
+	hashrate: SensorData = dfield(SensorData("Whatsminer Hash-Rate"))
+	wmtemp: SensorData = dfield(SensorData("Whatsminer Temperature"))
 
 class ValuePacer:
 	def __init__(self, readfunc, writefunc, delta_v, delta_t):
@@ -61,6 +84,8 @@ class Controller:
 		self.mqtt_sensor_temp_in = self.ha.create_temperature_sensor("sensor_temp_in", "Coolant inlet temperature")
 		self.mqtt_sensor_temp_out = self.ha.create_temperature_sensor("sensor_temp_out", "Coolant outlet temperature")
 		self.mqtt_sensor_flow_cool = self.ha.create_volume_sensor("sensor_flow_cool", "Coolant flow volume per minute")
+		self.ha.subscribe("wmpower/deadbeef/whatsminer/SENSOR", self.handle_mqtt_wmpower)
+		self.sensors = Sensors()
 
 	def mqtt_handle_main_switch(self, state):
 		self.relay_contactor.set_value(state)
@@ -77,6 +102,48 @@ class Controller:
 	def mqtt_handle_fan_switch(self, state):
 		self.relay_fan.set_value(state)
 
+	def _setsens(self, sensor, state, ts=None):
+		if ts is None:
+			ts = time()
+		try:
+			state = float(state)
+		except ValueError:
+			sensor.online = False
+		else:
+			sensor.state = state
+			sensor.ts = ts
+			sensor.online = True
+
+	def handle_mqtt_wmpower(self, obj):
+		if "Power" in obj:
+			self._setsens(self.sensors.wmpower, obj["Power"])
+		else:
+			self.sensors.power.online = False
+		if "HashRate" in obj:
+			self._setsens(self.sensors.hashrate, obj["HashRate"])
+		else:
+			self.sensors.hashrate.online = False
+		if "Temperature" in obj:
+			self._setsens(self.sensors.wmtemp, obj["Temperature"])
+		else:
+			self.sensors.wmtemp.online = False
+
+	def _timeout(self, ts):
+		return (ts < monotonic())
+
+	def cv_power_idle(self):
+		return (self.sensors.cvpower.state < 5.0)
+
+	async def set_valve_main_circuit(self):
+		debug("VALVE: Moving to main circuit...")
+		await self.bidir_valve.wait_left()
+		debug("VALVE: Movement finished")
+
+	async def set_valve_zolder_circuit(self):
+		debug("VALVE: Moving to zolder circuit...")
+		await self.bidir_valve.wait_right()
+		debug("VALVE: Movement finished")
+
 	async def sensor_updater(self):
 		vps = [
 			ValuePacer(self.temp_in.get_value, self.mqtt_sensor_temp_in.mqtt_value, 0.2, 10),
@@ -87,9 +154,54 @@ class Controller:
 			await asyncio.sleep(1)
 			for vp in vps:
 				vp.handle()
+			for s in self.sensors.__dict__:
+				sensor = getattr(self.sensors, s)
+				if sensor.ha_objid is not None:
+					state, ts = await self.ha.get_sensor_state_and_timestamp(sensor.ha_objid)
+					if state is not None:
+						self._setsens(sensor, state, ts)
+					else:
+						sensor.online = False
+
+	async def control_loop(self):
+		await self.set_valve_main_circuit()
+		await self.start_main_power()
+		while True:
+			await asyncio.sleep(3.1415)
+			igage = time() - self.sensors.cvpower.ts
+			print(f"Intergas power: {round(self.sensors.cvpower.state, 2)}W Updated {round(igage, 2)} seconds ago")
+
+	async def start_main_power(self):
+		info("Preparing to start main power...")
+		ts0 = monotonic() + 10
+		while not self._timeout(ts0):
+			await asyncio.sleep(1)
+			if not self.sensors.cvpower.online:
+				continue
+			if not self.sensors.tzone1.online:
+				continue
+			if not self.sensors.tzone0.online:
+				continue
+			if not self.sensors.pvpower.online:
+				continue
+			if not self.cv_power_idle():
+				info("Waiting for CV to stop running.")
+			break
+		info("Enable main power...")
+		self.relay_contactor.set_value(1)
+		info("Waiting for miner to boot...")
+		await asyncio.sleep(10)
+		while True:
+			await asyncio.sleep(2)
+			debug(f"WM power: {self.sensors.wmpower.state}")
+			if self.sensors.wmpower.state > 500.0:
+				break
+		info("Miner hashing.")
+		return 0
 
 	async def run(self):
 		asyncio.create_task(self.sensor_updater())
+		asyncio.create_task(self.control_loop())
 		await self.ha.run()
 
 def main(args):
