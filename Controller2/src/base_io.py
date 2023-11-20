@@ -55,6 +55,7 @@ class Bidir:
 		self.relay_on = relay_on
 		self.relay_dir = relay_dir
 		self.dwell = dwell
+		self.position = None
 
 	def turn_left(self):
 		self.relay_dir.set_value(0)
@@ -75,15 +76,24 @@ class Bidir:
 			return "right"
 		return "left"
 
+	def get_position(self):
+		return self.position
+
 	async def wait_left(self):
+		if self.position == "left":
+			return
 		self.turn_left()
 		await asyncio.sleep(self.dwell)
 		self.turn_off()
+		self.position = "left"
 
 	async def wait_right(self):
+		if self.position == "right":
+			return
 		self.turn_right()
 		await asyncio.sleep(self.dwell)
 		self.turn_off()
+		self.position = "right"
 
 class sysfs:
 	def __init__(self, path):
