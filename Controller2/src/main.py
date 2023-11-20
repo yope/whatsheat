@@ -11,6 +11,8 @@ import inspect
 from time import monotonic, time
 from dataclasses import dataclass, field, asdict
 from pprint import pformat
+import math
+from enum import Enum
 
 def dfield(mutable):
 	return field(default_factory=lambda :mutable)
@@ -23,15 +25,35 @@ class SensorData:
 	ts: float = 0.0
 	online: bool = False
 
+	def age(self):
+		return time() - self.ts
+
+	def age_online(self):
+		if not self.online:
+			return time()
+		return time() - self.ts
+
 @dataclass
 class Sensors:
-	cvpower: SensorData = dfield(SensorData("CV mains power", "intergas_power"))
-	tzone0: SensorData = dfield(SensorData("Temperature Living", "temperature_26"))
-	tzone1: SensorData = dfield(SensorData("Temperature Zolder", "temperature_11"))
-	pvpower: SensorData = dfield(SensorData("PV power output", "solaredge_i1_ac_power"))
-	wmpower: SensorData = dfield(SensorData("Whatsminer Power"))
-	hashrate: SensorData = dfield(SensorData("Whatsminer Hash-Rate"))
-	wmtemp: SensorData = dfield(SensorData("Whatsminer Temperature"))
+	power_cv: SensorData = dfield(SensorData("CV mains power", "intergas_power"))
+	temp_zone0: SensorData = dfield(SensorData("Temperature Living", "temperature_26"))
+	temp_zone1: SensorData = dfield(SensorData("Temperature Zolder", "temperature_11"))
+	power_pv: SensorData = dfield(SensorData("PV power output", "solaredge_i1_ac_power"))
+	power_wmp: SensorData = dfield(SensorData("WMPower meter power", "wmpower_energy_power"))
+	power_wm: SensorData = dfield(SensorData("Whatsminer Power"))
+	hashrate_wm: SensorData = dfield(SensorData("Whatsminer Hash-Rate"))
+	temp_wm: SensorData = dfield(SensorData("Whatsminer Temperature"))
+	temp_in: SensorData = dfield(SensorData("Coolant temperature in"))
+	temp_out: SensorData = dfield(SensorData("Coolant temperature out"))
+	flowrate_cool: SensorData = dfield(SensorData("Coolant flow rate"))
+
+class MinerStates(Enum):
+	OFF = 0
+	STARTING = 1
+	RUNNING = 2
+	IDLE = 3
+	STOPPNG = 4
+	STOPPED = 5
 
 class ValuePacer:
 	def __init__(self, readfunc, writefunc, delta_v, delta_t):
@@ -84,8 +106,10 @@ class Controller:
 		self.mqtt_sensor_temp_in = self.ha.create_temperature_sensor("sensor_temp_in", "Coolant inlet temperature")
 		self.mqtt_sensor_temp_out = self.ha.create_temperature_sensor("sensor_temp_out", "Coolant outlet temperature")
 		self.mqtt_sensor_flow_cool = self.ha.create_volume_sensor("sensor_flow_cool", "Coolant flow volume per minute")
-		self.ha.subscribe("wmpower/deadbeef/whatsminer/SENSOR", self.handle_mqtt_wmpower)
+		self.ha.subscribe("power_wm/deadbeef/whatsminer/SENSOR", self.handle_mqtt_power_wm)
 		self.sensors = Sensors()
+		self.need_cooling = False
+		self.state = MinerStates.STOPPED
 
 	def mqtt_handle_main_switch(self, state):
 		self.relay_contactor.set_value(state)
@@ -114,35 +138,37 @@ class Controller:
 			sensor.ts = ts
 			sensor.online = True
 
-	def handle_mqtt_wmpower(self, obj):
+	def handle_mqtt_power_wm(self, obj):
 		if "Power" in obj:
-			self._setsens(self.sensors.wmpower, obj["Power"])
+			self._setsens(self.sensors.power_wm, obj["Power"])
 		else:
 			self.sensors.power.online = False
 		if "HashRate" in obj:
-			self._setsens(self.sensors.hashrate, obj["HashRate"])
+			self._setsens(self.sensors.hashrate_wm, obj["HashRate"])
 		else:
-			self.sensors.hashrate.online = False
+			self.sensors.hashrate_wm.online = False
 		if "Temperature" in obj:
-			self._setsens(self.sensors.wmtemp, obj["Temperature"])
+			self._setsens(self.sensors.temp_wm, obj["Temperature"])
 		else:
-			self.sensors.wmtemp.online = False
+			self.sensors.temp_wm.online = False
 
 	def _timeout(self, ts):
 		return (ts < monotonic())
 
 	def cv_power_idle(self):
-		return (self.sensors.cvpower.state < 5.0)
+		return (self.sensors.power_cv.state < 5.0)
 
 	async def set_valve_main_circuit(self):
-		debug("VALVE: Moving to main circuit...")
-		await self.bidir_valve.wait_left()
-		debug("VALVE: Movement finished")
+		if self.bidir_valve.get_position() != "left":
+			debug("VALVE: Moving to main circuit...")
+			await self.bidir_valve.wait_left()
+			debug("VALVE: Movement finished")
 
 	async def set_valve_zolder_circuit(self):
-		debug("VALVE: Moving to zolder circuit...")
-		await self.bidir_valve.wait_right()
-		debug("VALVE: Movement finished")
+		if self.bidir_valve.get_position() != "right":
+			debug("VALVE: Moving to zolder circuit...")
+			await self.bidir_valve.wait_right()
+			debug("VALVE: Movement finished")
 
 	async def sensor_updater(self):
 		vps = [
@@ -162,40 +188,68 @@ class Controller:
 						self._setsens(sensor, state, ts)
 					else:
 						sensor.online = False
+			self._setsens(self.sensors.flowrate_cool, self.flow_cool.get_value())
+			self._setsens(self.sensors.temp_in, self.temp_in.get_value())
+			self._setsens(self.sensors.temp_out, self.temp_out.get_value())
 
 	async def control_loop(self):
 		await self.set_valve_main_circuit()
 		await self.start_main_power()
+		s = self.sensors
 		while True:
 			await asyncio.sleep(3.1415)
-			igage = time() - self.sensors.cvpower.ts
-			print(f"Intergas power: {round(self.sensors.cvpower.state, 2)}W Updated {round(igage, 2)} seconds ago")
+			igage = time() - s.power_cv.ts
+			print(f"Intergas power: {round(s.power_cv.state, 2)}W Updated {round(igage, 2)} seconds ago")
+			if s.power_wm.age_online() < 60 and s.power_wm.state > 300:
+				self.need_cooling = True
+			elif s.hashrate_wm.age_online() < 60 and s.hashrate_wm.state > 0:
+				self.need_cooling = True
+			elif s.power_wmp.age_online() < 120 and s.power_wmp.state > 200:
+				self.need_cooling = True
+			else:
+				self.need_cooling = False
+			if self.need_cooling:
+				self.relay_cool.set_value(1)
+				self.relay_water.set_value(1)
+			elif self.temp_wm.state < 30 and self.temp_in.state < 30 and self.temp_out.state < 30:
+				self.relay_water.set_value(0)
+			if not self.need_cooling and self.state == MinerStates.STOPPED:
+				self.relay_cool.set_value(0)
+			if self.need_cooling and not self.cv_power_idle():
+				# Need to dump heat to liquid to air heat exchanger...
+				await self.set_valve_zolder_circuit()
+				self.relay_fan.set_value(1)
+			else:
+				await self.set_valve_main_circuit()
+				self.relay_fan.set_value(0)
 
 	async def start_main_power(self):
 		info("Preparing to start main power...")
 		ts0 = monotonic() + 10
 		while not self._timeout(ts0):
-			await asyncio.sleep(1)
-			if not self.sensors.cvpower.online:
+			await asyncio.sleep(2)
+			if not self.sensors.power_cv.online:
 				continue
-			if not self.sensors.tzone1.online:
+			if not self.sensors.temp_zone1.online:
 				continue
-			if not self.sensors.tzone0.online:
+			if not self.sensors.temp_zone0.online:
 				continue
-			if not self.sensors.pvpower.online:
+			if not self.sensors.power_pv.online:
 				continue
 			if not self.cv_power_idle():
 				info("Waiting for CV to stop running.")
 			break
 		info("Enable main power...")
+		self.state = MinerStates.STARTING
 		self.relay_contactor.set_value(1)
 		info("Waiting for miner to boot...")
 		await asyncio.sleep(10)
 		while True:
 			await asyncio.sleep(2)
-			debug(f"WM power: {self.sensors.wmpower.state}")
-			if self.sensors.wmpower.state > 500.0:
+			debug(f"WM power: {self.sensors.power_wm.state}")
+			if self.sensors.power_wm.state > 500.0:
 				break
+		self.state = MinerStates.RUNNING
 		info("Miner hashing.")
 		return 0
 
