@@ -86,6 +86,7 @@ class Controller:
 	TEMP_LIMIT_COOL = 45
 	TEMP_LIMIT_SOFT_SHUTDOWN = 50
 	TEMP_LIMIT_EMERGENCY = 55
+	DELTA_TEMP_CV = 2
 	def __init__(self, mqtthost):
 		mqttuser = os.environ.get("KACHEL_MQTTUSER", None)
 		mqttpasswd = os.environ.get("KACHEL_MQTTPASSWD", None)
@@ -258,7 +259,6 @@ class Controller:
 			await self.set_valve_main_circuit()
 		else:
 			await self.set_valve_aux_circuit()
-		await self.start_main_power()
 		while True:
 			await asyncio.sleep(3.1415)
 			# 1. Check if something needs cooling:
@@ -288,7 +288,7 @@ class Controller:
 				# Need to dump heat to liquid to air heat exchanger...
 				await self.set_valve_aux_circuit()
 				self.relay_fan.set_value(1)
-			else:
+			elif not self.want_aux_heat:
 				await self.set_valve_main_circuit()
 				self.relay_fan.set_value(0)
 
@@ -358,6 +358,64 @@ class Controller:
 				await self.stop_main_power()
 				ts0 = monotonic() + 300 # 5 Minutes cool down time
 				continue
+
+	def _th_on(self, sp, v, hyst):
+		return v < sp
+
+	def _th_off(self, sp, v, hyst):
+		return v > (sp + hyst)
+
+	async def ambient_control_loop(self):
+		s = self.sensors
+		# Wait for sensors to fill with data...
+		while True:
+			await asyncio.sleep(1)
+			if not s.setpoint_tpo.online:
+				continue
+			if not s.temp_zone0.online or not s.temp_zone1.online:
+				continue
+			if not s.power_cv.online:
+				continue
+			if not s.temp_tpo.online:
+				continue
+			break
+		hyst = 1.0
+		while True:
+			await asyncio.sleep(4)
+			sp = s.setpoint_tpo.state
+			spcv = sp - self.DELTA_TEMP_CV
+			ttpo = s.temp_tpo.state
+			taux = s.temp_zone1.state
+			wmh = self.want_main_heat
+			wah = self.want_aux_heat
+			wch = self.want_cv_heat
+
+			# Want heat in main circuit
+			if self._th_on(sp, ttpo, hyst):
+				self.want_main_heat = True
+			elif self._th_off(sp, ttpo, hyst):
+				self.want_main_heat = False
+
+			# Want heat in aux circuit
+			if self._th_on(sp, taux, hyst):
+				self.want_aux_heat = True
+			elif self._th_off(sp, taux, hyst):
+				self.want_aux_heat = False
+
+			# Too cold, extra CV heat
+			if self._th_on(spcv, ttpo, hyst):
+				self.want_cv_heat = True
+			elif self._th_off(spcv, ttpo, hyst):
+				self.want_cv_heat = False
+
+			if wmh != self.want_main_heat:
+				info(f"MAIN HEAT: {'off' if wmh else 'on'}")
+
+			if wah != self.want_aux_heat:
+				info(f" AUX HEAT: {'off' if wah else 'on'}")
+
+			if wch != self.want_cv_heat:
+				info(f"  CV HEAT: {'off' if wch else 'on'}")
 
 	async def miner_idle_command(self):
 		print("TODO: miner idle command")
@@ -457,6 +515,7 @@ class Controller:
 		asyncio.create_task(self.sensor_updater())
 		asyncio.create_task(self.miner_control_loop())
 		asyncio.create_task(self.miner_power_loop())
+		asyncio.create_task(self.ambient_control_loop())
 		await self.ha.run()
 
 def main(args):
