@@ -5,6 +5,8 @@ import asyncio
 import os
 import math
 from logging import debug, info, warning, error
+import serial
+import json
 
 # Output GPIO names mapping:
 outputs = {
@@ -207,3 +209,56 @@ class Temperature:
 	def get_value(self):
 		return round(adc2celsius(65535 * self.adc.get_raw() / 3300 , R25=self.R25, BETA=self.BETA), 2)
 
+class SerialJSONSensor:
+	def __init__(self, sj, field, scale=1):
+		self.sj = sj
+		self.field = field
+		self.scale = scale
+
+	def get_value(self):
+		return self.sj.get_value(self.field, self.scale)
+
+class SerialJSON:
+	def __init__(self, port, baud):
+		self.s = serial.Serial(port, baud, timeout=0)
+		self.loop = None
+		self.current = None
+		self.rbuf = b''
+
+	def ensure_reader(self):
+		if self.loop is not None:
+			return
+		self.loop = asyncio.get_running_loop()
+		self.loop.add_reader(self.s.fileno(), self._handle_read)
+
+	def _handle_read(self):
+		l = self.s.read_until()
+		if len(l) == 0:
+			return
+		self.rbuf += l
+		if not b'\n' in self.rbuf:
+			return
+		data, self.rbuf = self.rbuf.split(b'\n',1)
+		data = data.strip(b' \r\n')
+		try:
+			obj = json.loads(data)
+		except json.JSONDecodeError:
+			info("SerialJSON: Got wrong JSON data: {data!r}")
+		else:
+			if self.current is None:
+				self.current = obj
+			else:
+				self.current.update(obj)
+
+	def get_value(self, field, scale=1):
+		self.ensure_reader()
+		if self.current is None:
+			return 0
+		try:
+			ret = self.current[field]
+		except KeyError:
+			ret = 0
+		return ret * scale
+
+	def get_sensor(self, field, scale=1):
+		return SerialJSONSensor(self, field, scale)
