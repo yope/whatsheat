@@ -120,9 +120,9 @@ class Controller:
 		self.mqtt_sensor_flow_cool = self.ha.create_volume_sensor("sensor_flow_cool", "Coolant flow volume per minute")
 		self.mqtt_sensor_co2_tpo = self.ha.create_co2_sensor("sensor_co2_tpo", "Pricom CO2 level")
 		self.mqtt_sensor_pressure_tpo = self.ha.create_pressure_sensor("sensor_pressure_tpo", "Pricom Atmospheric Pressure")
-		self.mqtt_sensor_illuminance_tpo = self.ha.create_co2_sensor("sensor_illuminance_tpo", "Pricom Ambient Light Level")
-		self.mqtt_sensor_humidity_tpo = self.ha.create_co2_sensor("sensor_humidity_tpo", "Pricom RH")
-		self.mqtt_sensor_setp_tpo = self.ha.create_co2_sensor("sensor_temp_sp_tpo", "Pricom Temperature Setpoint")
+		self.mqtt_sensor_illuminance_tpo = self.ha.create_illuminance_sensor("sensor_illuminance_tpo", "Pricom Ambient Light Level")
+		self.mqtt_sensor_humidity_tpo = self.ha.create_humidity_sensor("sensor_humidity_tpo", "Pricom RH")
+		self.mqtt_sensor_setp_tpo = self.ha.create_temperature_sensor("sensor_temp_sp_tpo", "Pricom Temperature Setpoint")
 		self.ha.subscribe("wmpower/deadbeef/whatsminer/SENSOR", self.handle_mqtt_power_wm)
 		self.sensors = Sensors()
 		self.need_cooling = False
@@ -207,7 +207,7 @@ class Controller:
 			ValuePacer(self.temp_out.get_value, self.mqtt_sensor_temp_out.mqtt_value, 2, 120, 0.2, 10),
 			ValuePacer(self.pricom_temp.get_value, self.mqtt_sensor_temp_tpo.mqtt_value, 2, 50, 0.2, 10),
 			ValuePacer(self.flow_cool.get_value, self.mqtt_sensor_flow_cool.mqtt_value, 0, 50, 0.2, 10),
-			ValuePacer(self.pricom_temp_sp.get_value, self.mqtt_sensor_temp_sp_tpo.mqtt_value, 2, 50, 0.2, 10),
+			ValuePacer(self.pricom_temp_sp.get_value, self.mqtt_sensor_setp_tpo.mqtt_value, 2, 50, 0.2, 10),
 			ValuePacer(self.pricom_rh.get_value, self.mqtt_sensor_humidity_tpo.mqtt_value, 1, 100, 0.2, 10),
 			ValuePacer(self.pricom_amb_light.get_value, self.mqtt_sensor_illuminance_tpo.mqtt_value, 0, 10000, 0.2, 10),
 			ValuePacer(self.pricom_pressure.get_value, self.mqtt_sensor_pressure_tpo.mqtt_value, 500, 2000, 0.2, 10),
