@@ -101,6 +101,22 @@ class HAVolumeSensor(HASensor):
 	def __init__(self, ha, uid, objid, name):
 		super().__init__(ha, uid, objid, name, "volume", "l")
 
+class HACO2Sensor(HASensor):
+	def __init__(self, ha, uid, objid, name):
+		super().__init__(ha, uid, objid, name, "carbon_dioxide", "ppm")
+
+class HAHumiditySensor(HASensor):
+	def __init__(self, ha, uid, objid, name):
+		super().__init__(ha, uid, objid, name, "humidity", "%")
+
+class HAIlluminanceSensor(HASensor):
+	def __init__(self, ha, uid, objid, name):
+		super().__init__(ha, uid, objid, name, "illuminance", "lx")
+
+class HAPressureSensor(HASensor):
+	def __init__(self, ha, uid, objid, name):
+		super().__init__(ha, uid, objid, name, "pressure", "hPa")
+
 class HomeAssistant:
 	def __init__(self, mqttserver, mqttuser, mqttpasswd, base="kachel"):
 		self.client = gmqtt.Client("kachel")
@@ -231,6 +247,18 @@ class HomeAssistant:
 
 	def create_volume_sensor(self, objid, name):
 		return self._create_sensor(objid, name, HAVolumeSensor, "V")
+
+	def create_co2_sensor(self, objid, name):
+		return self._create_sensor(objid, name, HACO2Sensor, "CO2")
+
+	def create_humidity_sensor(self, objid, name):
+		return self._create_sensor(objid, name, HAHumiditySensor, "H")
+
+	def create_illuminance_sensor(self, objid, name):
+		return self._create_sensor(objid, name, HAIlluminanceSensor, "L")
+
+	def create_pressure_sensor(self, objid, name):
+		return self._create_sensor(objid, name, HAPressureSensor, "P")
 
 	async def restapi_get(self, url):
 		baseurl = f"http://{self.mqttserver}:8123"
