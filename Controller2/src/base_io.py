@@ -242,7 +242,7 @@ class SerialJSON:
 		data = data.strip(b' \r\n')
 		try:
 			obj = json.loads(data)
-		except json.JSONDecodeError:
+		except (json.JSONDecodeError, UnicodeDecodeError):
 			info("SerialJSON: Got wrong JSON data: {data!r}")
 		else:
 			if self.current is None:
