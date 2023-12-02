@@ -1,7 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
+# import setproctitle
 from logging import debug, info, warning, error
 import logging
+from logging.handlers import SysLogHandler
 import asyncio
 import base_io
 import ha
@@ -13,6 +15,7 @@ from dataclasses import dataclass, field, asdict
 from pprint import pformat
 import math
 from enum import Enum
+
 
 def dfield(mutable):
 	return field(default_factory=lambda :mutable)
@@ -83,10 +86,14 @@ class ValuePacer:
 class Controller:
 	PRICOM_PORT = "/dev/ttyS0"
 	TEMP_LIMIT_IDLE = 30
-	TEMP_LIMIT_COOL = 45
+	TEMP_LIMIT_COOL = 40
 	TEMP_LIMIT_SOFT_SHUTDOWN = 50
 	TEMP_LIMIT_EMERGENCY = 55
 	DELTA_TEMP_CV = 2
+	MAX_ON_TIME_CV = 15*60
+	MIN_OFF_TIME_CV = 10*60
+	MIN_ON_TIME_CV = 2*60
+	MINING_MQTT_TOPIC = "wmpower/kachel/whatsminer/mining"
 	def __init__(self, mqtthost):
 		mqttuser = os.environ.get("KACHEL_MQTTUSER", None)
 		mqttpasswd = os.environ.get("KACHEL_MQTTPASSWD", None)
@@ -130,6 +137,7 @@ class Controller:
 		self.want_main_heat = False
 		self.want_aux_heat = False
 		self.want_cv_heat = False
+		self.miner_ok = True
 		self.commanded_state = MinerStates.OFF
 		self.state = MinerStates.OFF
 		self.sj = base_io.SerialJSON(self.PRICOM_PORT, 115200)
@@ -201,6 +209,9 @@ class Controller:
 			info("VALVE: Moving to aux circuit...")
 			await self.bidir_valve.wait_right()
 			debug("VALVE: Movement finished")
+
+	def is_valve_aux_active(self):
+		return self.bidir_valve.get_position() == "right"
 
 	async def sensor_updater(self):
 		vps = [
@@ -284,35 +295,42 @@ class Controller:
 				self.relay_cool.set_value(0)
 
 			# 3. Decide where to dump heat:
-			if self.need_cooling and not self.cv_power_idle():
+			if self.need_cooling and (not self.cv_power_idle() or not self.want_main_heat):
 				# Need to dump heat to liquid to air heat exchanger...
 				await self.set_valve_aux_circuit()
-				self.relay_fan.set_value(1)
 			elif not self.want_aux_heat:
 				await self.set_valve_main_circuit()
+
+			# 4. Decide whether the fan must be running:
+			if self.need_cooling and self.is_valve_aux_active():
+				self.relay_fan.set_value(1)
+			else:
 				self.relay_fan.set_value(0)
 
-			# 4. Check for soft-shutdown limit:
-			miner_ok = True
+			# 5. Check for soft-shutdown limit:
+			miner_ok = self.miner_ok
 			t = self.get_highest_temp()
 			if t > self.TEMP_LIMIT_SOFT_SHUTDOWN:
 				warning(f"Highest temperature is {t} °C! Performing soft shutdown...")
 				self.commanded_state = MinerStates.IDLE
 				miner_ok = False
 
-			# 5. Check for emergency shutdown limit:
+			# 6. Check for emergency shutdown limit:
 			if t > self.TEMP_LIMIT_EMERGENCY:
 				warning(f"Highest temperature is {t} °C! Performing emergency shutdown...")
 				self.commanded_state = MinerStates.STOPPED
 				miner_ok = False
 				await self.emergency_shutdown()
 
-			# 6. Check if we need to start the miner:
+			# 7. Check if we need to start the miner:
 			if self.want_main_heat or self.want_aux_heat:
 				if miner_ok:
 					self.commanded_state = MinerStates.RUNNING
-				else:
+				elif self.miner_ok:
+					# Old state was ok, new state not ok, complain once.
 					warning("Want miner heat, but miner not Ok.")
+			# Store new state
+			self.miner_ok = miner_ok
 
 	async def miner_power_loop(self):
 		MS = MinerStates
@@ -417,20 +435,48 @@ class Controller:
 			if wch != self.want_cv_heat:
 				info(f"  CV HEAT: {'off' if wch else 'on'}")
 
+	async def cv_heat_control_loop(self):
+		await asyncio.sleep(20) # Give sensors time to start up...
+		cvh0 = None # Force initial state
+		ts0 = monotonic() + self.MIN_OFF_TIME_CV
+		tson = monotonic() + self.MIN_ON_TIME_CV
+		# This is intentionally a polling loop, to avoid power chatter due to
+		# software bugs or other unforeseen issues. Granularity is 5 seconds.
+		while True:
+			await asyncio.sleep(5)
+			if self.relay_cv_heat.get_value() and self._timeout(tson):
+				info("CV: duty off time")
+				self.relay_cv_heat.set_value(0)
+				ts0 = monotonic() + self.MIN_OFF_TIME_CV
+				cvh0 = False # Force next cycle if heat still wanted.
+			if self.want_cv_heat == cvh0:
+				continue
+			if not self._timeout(ts0):
+				continue
+			cvh0 = self.want_cv_heat
+			if cvh0 and self.relay_cv_heat.get_value() == 0:
+				info("CV: duty on time")
+				self.relay_cv_heat.set_value(1)
+				# CV heat minimum 2 minutes, maximum MAX_ON_TIME_CV
+				ts0 = monotonic() + self.MIN_ON_TIME_CV
+				tson = monotonic() + self.MAX_ON_TIME_CV
+			elif self.relay_cv_heat.get_value() == 1:
+				info("CV: Turn off")
+				self.relay_cv_heat.set_value(0)
+				# CV heat off cycle minimum 10 minutes
+				ts0 = monotonic() + self.MIN_OFF_TIME_CV
+
 	async def miner_idle_command(self):
-		print("TODO: miner idle command")
+		info("Miner idle command")
+		self.ha.mqtt_pub(self.MINING_MQTT_TOPIC, "off")
 		await asyncio.sleep(1)
 		self.state = MinerStates.IDLE
 
 	async def miner_mining_command(self):
-		print("TODO: miner mining command")
+		info("Miner mining command")
+		self.ha.mqtt_pub(self.MINING_MQTT_TOPIC, "on")
 		await asyncio.sleep(1)
 		self.state = MinerStates.RUNNING
-
-	async def soft_shutdown(self):
-		print("TODO: Soft shutdown")
-		await asyncio.sleep(1)
-		self.state = MinerStates.IDLE
 
 	async def emergency_shutdown(self):
 		warning("Emergency shutdown: Power OFF!!")
@@ -471,7 +517,7 @@ class Controller:
 					warning(f"Trying to start miner while in {self.state.name} state! Waiting...")
 					continue
 				break
-			if self.timeout(ts0):
+			if self._timeout(ts0):
 				warning("Giving up preparing to start main power!")
 				return -1
 			info("Enable main power...")
@@ -516,6 +562,7 @@ class Controller:
 		asyncio.create_task(self.miner_control_loop())
 		asyncio.create_task(self.miner_power_loop())
 		asyncio.create_task(self.ambient_control_loop())
+		asyncio.create_task(self.cv_heat_control_loop())
 		await self.ha.run()
 
 def main(args):
@@ -527,15 +574,18 @@ def main(args):
 		-h <host>       : Specify hostname/ip-address of miner
 		-v              : Verbose mode. More logging output.
 		-d              : Enable debug mode. Lot's of logging output!
+		-s              : Enable logging to syslog.
 		--help          : Show this message.
 
 	Environment Variables to avoid leaking credentials to the command line:
 		KACHEL_PASSWD  : Admin password.
 		KACHEL_MQTTUSER, KACHEL_MQTTPASSWD : Likewise for MQTT broker access.
 	"""
+	# setproctitle.setproctitle("kachel")
 	mqtthost = None
 	debug = False
 	verbose = False
+	syslog = False
 	while args:
 		a = args.pop(0)
 		if a == "-h":
@@ -544,6 +594,8 @@ def main(args):
 			verbose = True
 		elif a == "-d":
 			debug = True
+		elif a == "-s":
+			syslog = True
 		elif a == "--help":
 			print(inspect.cleandoc(main.__doc__))
 			return 0
@@ -554,6 +606,10 @@ def main(args):
 	else:
 		loglevel = logging.WARNING
 	logging.basicConfig(level=loglevel)
+	if syslog:
+		logger = logging.getLogger("root")
+		sh = SysLogHandler(facility=SysLogHandler.LOG_DAEMON, address="/dev/log")
+		logger.addHandler(sh)
 	if mqtthost is None:
 		print("ERROR: Use --help for usage.")
 		return -1
