@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, asdict
 from pprint import pformat
 import math
 from enum import Enum
-
+from webui import Server
 
 def dfield(mutable):
 	return field(default_factory=lambda :mutable)
@@ -560,6 +560,7 @@ class Controller:
 		self.state = MinerStates.OFF
 
 	async def run(self):
+		await self.webserver.startup()
 		asyncio.create_task(self.sensor_updater())
 		asyncio.create_task(self.miner_control_loop())
 		asyncio.create_task(self.miner_power_loop())
