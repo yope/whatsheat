@@ -139,6 +139,8 @@ class Controller:
 		self.want_main_heat = False
 		self.want_aux_heat = False
 		self.want_cv_heat = False
+		self.manual_override = False
+		self.manual_override_ts = 0
 		self.miner_ok = True
 		self.commanded_state = MinerStates.OFF
 		self.state = MinerStates.OFF
@@ -149,6 +151,14 @@ class Controller:
 		self.pricom_pressure = self.sj.get_sensor("Pressure")
 		self.pricom_amb_light = self.sj.get_sensor("AmbientLight")
 		self.pricom_temp_sp = self.sj.get_sensor("TempSetpoint", 0.1)
+		self.webserver = Server(self)
+
+	def set_manual_override(self, val):
+		if val and not self.manual_override:
+			warning("Manual override activated!")
+			self.manual_override_ts = monotonic()
+		self.manual_override = val
+		return True
 
 	def mqtt_handle_main_switch(self, state):
 		self.relay_contactor.set_value(state)
@@ -286,6 +296,10 @@ class Controller:
 			else:
 				self.need_cooling = False
 
+			# If manual override is active, don't proceed.
+			if self.manual_override:
+				continue
+
 			# 2. Decide whether pumps need to be running or not:
 			if self.need_cooling:
 				self.relay_cool.set_value(1)
@@ -342,6 +356,9 @@ class Controller:
 		# software bugs or other unforeseen issues. Granularity is 5 seconds.
 		while True:
 			await asyncio.sleep(5)
+			if self.manual_override:
+				continue
+
 			cmd = self.commanded_state
 			st = self.state
 			if cmd == cmd0 or st == cmd:
@@ -446,6 +463,9 @@ class Controller:
 		# software bugs or other unforeseen issues. Granularity is 5 seconds.
 		while True:
 			await asyncio.sleep(5)
+			if self.manual_override:
+				continue
+
 			if self.relay_cv_heat.get_value() and self._timeout(tson):
 				info("CV: duty off time")
 				self.relay_cv_heat.set_value(0)
