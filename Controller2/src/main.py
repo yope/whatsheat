@@ -407,21 +407,27 @@ class Controller:
 		# Wait for sensors to fill with data...
 		while True:
 			await asyncio.sleep(1)
-			if not s.setpoint_tpo.online:
-				continue
+			#if not s.setpoint_tpo.online:
+			#	continue
 			if not s.temp_zone0.online or not s.temp_zone1.online:
 				continue
 			if not s.power_cv.online:
 				continue
-			if not s.temp_tpo.online:
-				continue
+			#if not s.temp_tpo.online:
+			#	continue
 			break
 		hyst = 1.0
 		while True:
 			await asyncio.sleep(4)
+			if s.temp_tpo.online:
+				sens_main = s.temp_tpo
+			else:
+				sens_main = s.temp_zone0
 			sp = s.setpoint_tpo.state
+			if sp < 16:
+				sp = 18 # TPO probably offline
 			spcv = sp - self.DELTA_TEMP_CV
-			ttpo = s.temp_tpo.state
+			ttpo = sens_main.state
 			taux = s.temp_zone1.state
 			wmh = self.want_main_heat
 			wah = self.want_aux_heat
