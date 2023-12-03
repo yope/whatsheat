@@ -75,6 +75,8 @@ class ValuePacer:
 		t1 = monotonic()
 		dt = t1 - self.t0
 		v1 = self.readfunc()
+		if v1 is None:
+			return
 		if v1 < self.min_v or v1 > self.max_v:
 			return
 		dv = v1 - self.v0
@@ -168,7 +170,7 @@ class Controller:
 			ts = time()
 		try:
 			state = float(state)
-		except ValueError:
+		except TypeError:
 			sensor.online = False
 			debug(f"SENSOR: {sensor.name} is Offline!")
 		else:

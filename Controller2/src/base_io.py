@@ -253,11 +253,11 @@ class SerialJSON:
 	def get_value(self, field, scale=1):
 		self.ensure_reader()
 		if self.current is None:
-			return 0
+			return None
 		try:
 			ret = self.current[field]
 		except KeyError:
-			ret = 0
+			ret = None
 		return ret * scale
 
 	def get_sensor(self, field, scale=1):
