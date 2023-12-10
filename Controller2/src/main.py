@@ -89,9 +89,12 @@ class Controller:
 	PRICOM_PORT = "/dev/ttyS0"
 	TEMP_LIMIT_IDLE = 30
 	TEMP_LIMIT_COOL = 40
-	TEMP_LIMIT_SOFT_SHUTDOWN = 50
-	TEMP_LIMIT_EMERGENCY = 55
+	TEMP_LIMIT_SOFT_SHUTDOWN = 55
+	TEMP_LIMIT_EMERGENCY = 60
+	TEMP_AUX_SWITCH_HIGH = 50
+	TEMP_AUX_SWITCH_HYST = 7
 	DELTA_TEMP_CV = 2
+	DELTA_TEMP_AUX = 1.5
 	MAX_ON_TIME_CV = 15*60
 	MIN_OFF_TIME_CV = 10*60
 	MIN_ON_TIME_CV = 2*60
@@ -140,6 +143,7 @@ class Controller:
 		self.want_aux_heat = False
 		self.want_cv_heat = False
 		self.manual_override = False
+		self.can_cool = False
 		self.manual_override_ts = 0
 		self.miner_ok = True
 		self.commanded_state = MinerStates.OFF
@@ -210,6 +214,18 @@ class Controller:
 	def cv_power_idle(self):
 		return (self.sensors.power_cv.state < 5.0)
 
+	def cv_power_heat(self):
+		return (self.sensors.power_cv.state > 68)
+
+	def cv_power_water(self):
+		return (not self.cv_power_idle() and not self.cv_power_heat())
+
+	def can_dump_aux(self):
+		tlim = self.TEMP_AUX_SWITCH_HIGH
+		if not self.is_valve_aux_active():
+			tlim -= self.TEMP_AUX_SWITCH_HYST
+		return (self.get_highest_temp() < tlim)
+
 	async def set_valve_main_circuit(self):
 		if self.bidir_valve.get_position() != "left":
 			info("VALVE: Moving to main circuit...")
@@ -223,7 +239,9 @@ class Controller:
 			debug("VALVE: Movement finished")
 
 	def is_valve_aux_active(self):
-		return self.bidir_valve.get_position() == "right"
+		vs = self.bidir_valve.get_status()
+		vp = self.bidir_valve.get_position()
+		return (vs == "right") or (vp == "right")
 
 	async def sensor_updater(self):
 		vps = [
@@ -270,6 +288,29 @@ class Controller:
 		s = self.sensors
 		return max(s.temp_in.state, s.temp_out.state, s.temp_wm.state)
 
+	def dump_heat(self, nc, wmh, wah, cvpw, cda):
+		if cvpw and cda:
+			# If CV is heating water and we can dump on aux, we must always do so.
+			return "aux"
+		if not nc:
+			# No cooling required, miner off
+			return "main"
+		if cvpw and not cda:
+			# If CV is heating water but we can't dump to aux, we must always stop.
+			return "off"
+		if not cda:
+			# If we can't dump to AUX, then select main:
+			return "main"
+		# Can dump to aux, but should we?
+		if not wah:
+			return "main"
+		if wah and wmh:
+			return "main" # FIXME: We could optionally select "aux" here.
+		if wah:
+			return "aux"
+		# Default is always "main", although we shouldn't get here.
+		return "main"
+
 	async def miner_control_loop(self):
 		s = self.sensors
 		# Valve position unknown at startup, put into known position:
@@ -282,6 +323,7 @@ class Controller:
 			await self.set_valve_main_circuit()
 		else:
 			await self.set_valve_aux_circuit()
+		fants = monotonic()
 		while True:
 			await asyncio.sleep(3.1415)
 			# 1. Check if something needs cooling:
@@ -300,30 +342,52 @@ class Controller:
 			if self.manual_override:
 				continue
 
-			# 2. Decide whether pumps need to be running or not:
-			if self.need_cooling:
+			# 2. Decide where to dump heat:
+			heatdest = self.dump_heat(self.need_cooling, self.want_main_heat, self.want_aux_heat,
+									self.cv_power_water(), self.can_dump_aux())
+			if heatdest == "main":
+				await self.set_valve_main_circuit()
+				self.can_cool = True
+			elif heatdest == "aux":
+				await self.set_valve_aux_circuit()
+				self.can_cool = True
+			else:
+				info("Need cooling, but cannot dump heat. Pausing...")
+				self.can_cool = False
+
+			# 3. Decide whether pumps need to be running or not:
+			if self.need_cooling and self.can_cool:
+				# Easy, both pumps on.
 				self.relay_cool.set_value(1)
 				await asyncio.sleep(0.2)
 				self.relay_water.set_value(1)
-			elif self.get_highest_temp() < self.TEMP_LIMIT_IDLE:
-				self.relay_water.set_value(0)
-			if not self.need_cooling and self.state == MinerStates.STOPPED:
-				self.relay_cool.set_value(0)
-
-			# 3. Decide where to dump heat:
-			if self.need_cooling and (not self.cv_power_idle() or not self.want_main_heat):
-				# Need to dump heat to liquid to air heat exchanger...
-				await self.set_valve_aux_circuit()
-			elif not self.want_aux_heat:
-				await self.set_valve_main_circuit()
+			else:
+				# Handle water pump
+				if not self.can_cool:
+					# If cooling isn't possible, water pump must be off!
+					self.relay_water.set_value(0)
+				elif self.state == MinerStates.STOPPED and self.get_highest_temp() < self.TEMP_LIMIT_IDLE:
+					self.relay_water.set_value(0)
+				else:
+					self.relay_water.set_value(1)
+				# Handle water pump, always on except if miner off and fully cooled down.
+				if self.state == MinerStates.STOPPED and self.get_highest_temp() < self.TEMP_LIMIT_IDLE:
+					self.relay_cool.set_value(0)
+				else:
+					self.relay_cool.set_value(1)
 
 			# 4. Decide whether the fan must be running:
 			if self.need_cooling and self.is_valve_aux_active():
 				self.relay_fan.set_value(1)
-			else:
+				fants = monotonic() + 80
+			elif self._timeout(fants):
 				self.relay_fan.set_value(0)
 
-			# 5. Check for soft-shutdown limit:
+			# 5. Check if we want heat but cannot dump it anywhere
+			if not self.can_cool:
+				self.commanded_state = MinerStates.IDLE
+
+			# 6. Check for soft-shutdown limit:
 			miner_ok = self.miner_ok
 			t = self.get_highest_temp()
 			if t > self.TEMP_LIMIT_SOFT_SHUTDOWN:
@@ -331,15 +395,15 @@ class Controller:
 				self.commanded_state = MinerStates.IDLE
 				miner_ok = False
 
-			# 6. Check for emergency shutdown limit:
+			# 7. Check for emergency shutdown limit:
 			if t > self.TEMP_LIMIT_EMERGENCY:
 				warning(f"Highest temperature is {t} °C! Performing emergency shutdown...")
 				self.commanded_state = MinerStates.STOPPED
 				miner_ok = False
 				await self.emergency_shutdown()
 
-			# 7. Check if we need to start the miner:
-			if self.want_main_heat or self.want_aux_heat:
+			# 8. Check if we need to start the miner:
+			if (self.want_main_heat or self.want_aux_heat) and self.can_cool:
 				if miner_ok:
 					self.commanded_state = MinerStates.RUNNING
 				elif self.miner_ok:
@@ -426,6 +490,7 @@ class Controller:
 			sp = s.setpoint_tpo.state
 			if sp < 16:
 				sp = 18 # TPO probably offline
+			spaux = sp - self.DELTA_TEMP_AUX
 			spcv = sp - self.DELTA_TEMP_CV
 			ttpo = sens_main.state
 			taux = s.temp_zone1.state
@@ -440,9 +505,9 @@ class Controller:
 				self.want_main_heat = False
 
 			# Want heat in aux circuit
-			if self._th_on(sp, taux, hyst):
+			if self._th_on(spaux, taux, hyst):
 				self.want_aux_heat = True
-			elif self._th_off(sp, taux, hyst):
+			elif self._th_off(spaux, taux, hyst):
 				self.want_aux_heat = False
 
 			# Too cold, extra CV heat
@@ -534,8 +599,8 @@ class Controller:
 					continue
 				if not self.sensors.power_pv.online:
 					continue
-				if not self.cv_power_idle():
-					info("Waiting for CV to stop running.")
+				if self.cv_power_water():
+					info("Waiting for CV hot water to stop running.")
 					continue
 				t = self.get_highest_temp()
 				if t > self.TEMP_LIMIT_SOFT_SHUTDOWN:

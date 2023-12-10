@@ -59,7 +59,7 @@ class KachelUI {
 		let ms = this._div_cls("pane", "status");
 		md.appendChild(ms);
 		this.status_miner = ms;
-		let bools = ["miner_ok", "need_cooling", "want_aux_heat", "want_main_heat", "want_cv_heat", "manual_override"];
+		let bools = ["miner_ok", "can_cool", "need_cooling", "want_aux_heat", "want_main_heat", "want_cv_heat", "manual_override"];
 		for (const b of bools) {
 			let d = this._div_cls("status-bool");
 			d.id = `div-${b}`;
