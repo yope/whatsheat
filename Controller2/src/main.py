@@ -381,6 +381,8 @@ class Controller:
 					self.relay_water.set_value(0)
 				elif self.state == MinerStates.STOPPED and self.get_highest_temp() < self.TEMP_LIMIT_IDLE:
 					self.relay_water.set_value(0)
+				elif not self.need_cooling and self.cv_power_water():
+					self.relay_water.set_value(0)
 				else:
 					self.relay_water.set_value(1)
 				# Handle water pump, always on except if miner off and fully cooled down.
