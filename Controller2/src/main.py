@@ -124,8 +124,8 @@ class Controller:
 		self.freq0 = base_io.Frequency(counter0)
 		self.freq1 = base_io.Frequency(counter1)
 		adcpath = "/sys/bus/iio/devices/iio:device1/"
-		self.temp_in = base_io.Temperature(base_io.IioAdc(adcpath, 0), R25=50000)
-		self.temp_out = base_io.Temperature(base_io.IioAdc(adcpath, 1), R25=10000)
+		self.temp_in = base_io.Temperature(base_io.IioAdc(adcpath, 2), R25=50000, BETA=3850)
+		self.temp_out = base_io.Temperature(base_io.IioAdc(adcpath, 3), R25=10000, BETA=4050)
 		self.flow_cool = base_io.FlowRate(self.freq0, 6.6)
 		self.mqtt_sensor_temp_in = self.ha.create_temperature_sensor("sensor_temp_in", "Coolant inlet temperature")
 		self.mqtt_sensor_temp_out = self.ha.create_temperature_sensor("sensor_temp_out", "Coolant outlet temperature")
