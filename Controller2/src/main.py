@@ -307,7 +307,7 @@ class Controller:
 			return "aux"
 		if not nc:
 			# No cooling required, miner off
-			return "main"
+			return "main" # FMIXE!!
 		if cvpw and not cda:
 			# If CV is heating water but we can't dump to aux, we must always stop.
 			return "off"
