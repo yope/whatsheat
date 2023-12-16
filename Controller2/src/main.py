@@ -79,7 +79,7 @@ class ValuePacer:
 			return
 		if v1 < self.min_v or v1 > self.max_v:
 			return
-		dv = v1 - self.v0
+		dv = abs(v1 - self.v0)
 		if dt > self.delta_t or dv > self.delta_v:
 			self.writefunc(v1)
 			self.t0 = t1
