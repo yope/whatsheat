@@ -227,7 +227,7 @@ class Controller:
 		tlim = self.TEMP_AUX_SWITCH_HIGH
 		if not self.is_valve_aux_active():
 			tlim -= self.TEMP_AUX_SWITCH_HYST
-		return (self.get_highest_temp() < tlim)
+		return (self.get_best_miner_temp() < tlim)
 
 	async def set_valve_main_circuit(self):
 		if self.bidir_valve.get_position() != "left":
@@ -289,6 +289,16 @@ class Controller:
 
 	def get_highest_temp(self):
 		s = self.sensors
+		return max(s.temp_in.state, s.temp_out.state, s.temp_wm.state)
+
+	def get_best_miner_temp(self):
+		s = self.sensors
+		temp = s.temp_wm.state
+		if s.temp_wm.age_online() < 10.0 and temp > 15.0:
+			return temp
+		temp = s.temp_out.state
+		if s.temp_out.age_online() < 20.0 and temp > 15.0:
+			return temp
 		return max(s.temp_in.state, s.temp_out.state, s.temp_wm.state)
 
 	def dump_heat(self, nc, wmh, wah, cvpw, cda):
