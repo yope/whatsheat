@@ -99,7 +99,7 @@ class Controller:
 	MIN_OFF_TIME_CV = 10*60
 	MIN_ON_TIME_CV = 2*60
 	MINING_MQTT_TOPIC = "wmpower/kachel/whatsminer/mining"
-	def __init__(self, mqtthost):
+	def __init__(self, mqtthost, manual_override):
 		mqttuser = os.environ.get("KACHEL_MQTTUSER", None)
 		mqttpasswd = os.environ.get("KACHEL_MQTTPASSWD", None)
 		self.relay_water = base_io.Relay("water_pump")
@@ -143,6 +143,7 @@ class Controller:
 		self.want_aux_heat = False
 		self.want_cv_heat = False
 		self.manual_override = False
+		self.set_manual_override(manual_override)
 		self.can_cool = False
 		self.manual_override_ts = 0
 		self.miner_ok = True
@@ -680,6 +681,7 @@ def main(args):
 	debug = False
 	verbose = False
 	syslog = False
+	manual = False
 	while args:
 		a = args.pop(0)
 		if a == "-h":
@@ -690,6 +692,8 @@ def main(args):
 			debug = True
 		elif a == "-s":
 			syslog = True
+		elif a == "-m":
+			manual = True
 		elif a == "--help":
 			print(inspect.cleandoc(main.__doc__))
 			return 0
@@ -707,7 +711,7 @@ def main(args):
 	if mqtthost is None:
 		print("ERROR: Use --help for usage.")
 		return -1
-	c = Controller(mqtthost)
+	c = Controller(mqtthost, manual)
 	asyncio.run(c.run())
 
 if __name__ == "__main__":
