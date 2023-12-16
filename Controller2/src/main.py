@@ -415,8 +415,9 @@ class Controller:
 				miner_ok = False
 				await self.emergency_shutdown()
 
-			# 8. Check if we need to start the miner:
-			if (self.want_main_heat or self.want_aux_heat) and self.can_cool:
+			# 8. Check if we need to start the miner. Wait for hot water demand to
+			# stop if it is active.
+			if (self.want_main_heat or self.want_aux_heat) and self.can_cool and not self.cv_power_water():
 				if miner_ok:
 					self.commanded_state = MinerStates.RUNNING
 				elif self.miner_ok:
