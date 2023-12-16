@@ -7,6 +7,7 @@ import math
 from logging import debug, info, warning, error
 import serial
 import json
+from collections import deque
 
 # Output GPIO names mapping:
 outputs = {
@@ -30,6 +31,30 @@ def adc2celsius(adc, R25=50000, BETA=3950):
 	if v == 0:
 		return 0
 	return 1 / v - 273.15
+
+class Filter:
+	def __init__(self, n, tmax):
+		self.tmax = tmax
+		self.queue = deque(maxlen=n)
+
+	def read(self, vin):
+		self.queue.append((monotonic(), vin))
+		return self.wavg()
+
+	def wavg(self):
+		acc = 0
+		wacc = 0
+		ts0, v0 = self.queue[-1]
+		for ts, val in self.queue:
+			dt = ts0 - ts
+			if dt > self.tmax:
+				continue
+			w = self.tmax - dt
+			acc += w * val
+			wacc += w
+		if wacc == 0:
+			return v0
+		return acc / wacc
 
 class Relay:
 	def __init__(self, name, default=0):
@@ -158,9 +183,9 @@ class Frequency:
 			return None
 		return dc / dt
 
-	def get_value(self, reset=True):
+	def get_value(self, reset=4.5):
 		ret = self._get_value()
-		if reset:
+		if monotonic() - self.t0 > reset:
 			self._get_zero()
 		return ret
 
@@ -184,9 +209,10 @@ class FlowRate:
 		self.freq = freq
 		self.fact = fact
 		self.freq.start()
+		self.filter = Filter(10, 5)
 
 	def get_value(self):
-		return round(self.freq.get_value() / self.fact, 2)
+		return round(self.filter.read(self.freq.get_value() / self.fact), 2)
 
 class IioAdc(sysfs):
 	def __init__(self, path, channel):
@@ -205,9 +231,10 @@ class Temperature:
 		self.R25 = R25
 		self.BETA = BETA
 		self.adc = adc
+		self.filter = Filter(10, 10)
 
 	def get_value(self):
-		return round(adc2celsius(65535 * self.adc.get_raw() / 3300 , R25=self.R25, BETA=self.BETA), 2)
+		return round(self.filter.read(adc2celsius(65535 * self.adc.get_raw() / 3300 , R25=self.R25, BETA=self.BETA)), 2)
 
 class SerialJSONSensor:
 	def __init__(self, sj, field, scale=1):
