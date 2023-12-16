@@ -332,10 +332,11 @@ class Controller:
 			if s.power_cv.online:
 				break
 			await asyncio.sleep(1)
-		if self.cv_power_idle():
-			await self.set_valve_main_circuit()
-		else:
-			await self.set_valve_aux_circuit()
+		if not self.manual_override:
+			if self.cv_power_idle():
+				await self.set_valve_main_circuit()
+			else:
+				await self.set_valve_aux_circuit()
 		fants = monotonic()
 		while True:
 			await asyncio.sleep(3.1415)
