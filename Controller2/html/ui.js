@@ -123,6 +123,11 @@ class KachelUI {
 					this._cls_mod_text(attr, txt, "status-bidir-on", val.status !== "off");
 				}
 			}
+			if (typeof val == "string") {
+				let d = this._div_cls("sensor-value", "sensor-value-online");
+				d.innerText = `${attr}: ${val}`;
+				sv.appendChild(d);
+			}
 		}
 	}
 }

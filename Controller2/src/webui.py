@@ -57,7 +57,7 @@ class WsHandler:
 			return True
 		if dataclasses.is_dataclass(val):
 			return True
-		if isinstance(val, enum.EnumType):
+		if isinstance(val, enum.Enum):
 			return True
 		if isinstance(val, base_io.Relay):
 			return True
@@ -68,8 +68,8 @@ class WsHandler:
 	def _member_translate(self, val):
 		if dataclasses.is_dataclass(val):
 			return dataclasses.asdict(val)
-		if isinstance(val, enum.EnumType):
-			return val.value
+		if isinstance(val, enum.Enum):
+			return val.name
 		if isinstance(val, base_io.Relay):
 			return {"class": "Relay", "value": val.get_value()}
 		if isinstance(val, base_io.Bidir):
