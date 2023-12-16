@@ -433,6 +433,11 @@ class Controller:
 		# software bugs or other unforeseen issues. Granularity is 5 seconds.
 		while True:
 			await asyncio.sleep(5)
+
+			# Check for state inconsistencies, if miner is surprisingly running:
+			if self.sensors.power_wm.state > 500 and self.state == MS.OFF:
+				self.state = MS.RUNNING
+
 			if self.manual_override:
 				continue
 
