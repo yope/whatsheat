@@ -597,6 +597,7 @@ class Controller:
 		self.state = MinerStates.STOPPED
 
 	async def start_main_power(self):
+		may_need_enable = False
 		if self.relay_contactor.get_value() == 0:
 			info("Preparing to start main power...")
 			ts0 = monotonic() + 10
@@ -628,6 +629,7 @@ class Controller:
 			self.relay_contactor.set_value(1)
 		else:
 			info("Main power already enabled!")
+			may_need_enable = True # Maybe we need to enable mining
 		if self.state == MinerStates.RUNNING:
 			info("Miner already in running state!")
 			return -2
@@ -637,6 +639,8 @@ class Controller:
 		self.state = MinerStates.STARTING
 		info("Waiting for miner to boot...")
 		await asyncio.sleep(10)
+		if may_need_enable and 0 < self.sensors.power_wm.state < 500:
+			await self.miner_mining_command()
 		while True:
 			await asyncio.sleep(2)
 			if self.state != MinerStates.STARTING:
