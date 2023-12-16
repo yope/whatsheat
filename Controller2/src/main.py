@@ -10,7 +10,7 @@ import ha
 import os
 import sys
 import inspect
-from time import monotonic, time
+from time import monotonic, time, localtime
 from dataclasses import dataclass, field, asdict
 from pprint import pformat
 import math
@@ -222,6 +222,8 @@ class Controller:
 		return (not self.cv_power_idle() and not self.cv_power_heat())
 
 	def can_dump_aux(self):
+		if self.is_night_time():
+			return False
 		tlim = self.TEMP_AUX_SWITCH_HIGH
 		if not self.is_valve_aux_active():
 			tlim -= self.TEMP_AUX_SWITCH_HYST
@@ -467,6 +469,12 @@ class Controller:
 	def _th_off(self, sp, v, hyst):
 		return v > (sp + hyst)
 
+	def is_night_time(self):
+		h = localtime().tm_hour
+		if h > 22 or h < 9:
+			return True
+		return False
+
 	async def ambient_control_loop(self):
 		s = self.sensors
 		# Wait for sensors to fill with data...
@@ -505,8 +513,10 @@ class Controller:
 			elif self._th_off(sp, ttpo, hyst):
 				self.want_main_heat = False
 
-			# Want heat in aux circuit
-			if self._th_on(spaux, taux, hyst):
+			# Want heat in aux circuit, never during night hours.
+			if self.is_night_time():
+				self.want_aux_heat = False
+			elif self._th_on(spaux, taux, hyst):
 				self.want_aux_heat = True
 			elif self._th_off(spaux, taux, hyst):
 				self.want_aux_heat = False
