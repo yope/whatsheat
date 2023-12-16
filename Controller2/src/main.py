@@ -446,6 +446,7 @@ class Controller:
 			if cmd == MS.IDLE and st == MS.RUNNING:
 				await self.miner_idle_command()
 				ts0 = monotonic() + 120 # Hold off 2 minutes at least.
+				cmd0 = cmd
 				continue
 
 			# All other transitions in here shouldn't be done quickly.
@@ -456,21 +457,25 @@ class Controller:
 			if cmd == MS.RUNNING and st == MS.OFF:
 				await self.start_main_power()
 				ts0 = monotonic() + 60 # Hold off 60 seconds at least.
+				cmd0 = cmd
 				continue
 
 			if cmd == MS.RUNNING and st == MS.IDLE:
 				await self.miner_mining_command()
 				ts0 = monotonic() + 60 # Hold off 60 seconds at least.
+				cmd0 = cmd
 				continue
 
 			if cmd == MS.OFF and st == MS.RUNNING:
 				await self.miner_idle_command()
 				ts0 = monotonic() + 60 # One minute cool down time
+				cmd0 = cmd
 				continue
 
 			if cmd == MS.OFF and st == MS.IDLE:
 				await self.stop_main_power()
 				ts0 = monotonic() + 300 # 5 Minutes cool down time
+				cmd0 = cmd
 				continue
 
 	def _th_on(self, sp, v, hyst):
