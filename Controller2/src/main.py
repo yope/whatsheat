@@ -379,8 +379,8 @@ class Controller:
 				self.relay_water.set_value(1)
 			else:
 				# Handle water pump
-				if not self.can_cool:
-					# If cooling isn't possible, water pump must be off!
+				if not self.can_cool and not self.is_valve_aux_active():
+					# If cooling isn't possible on main circuit, water pump must be off!
 					self.relay_water.set_value(0)
 				elif self.state == MinerStates.STOPPED and self.get_highest_temp() < self.TEMP_LIMIT_IDLE:
 					self.relay_water.set_value(0)
