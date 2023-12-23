@@ -296,7 +296,7 @@ class Controller:
 	def get_best_miner_temp(self):
 		s = self.sensors
 		temp = s.temp_wm.state
-		if s.temp_wm.age_online() < 10.0 and temp > 15.0:
+		if s.temp_wm.age_online() < 15.0 and temp > 15.0:
 			return temp
 		temp = s.temp_out.state
 		if s.temp_out.age_online() < 20.0 and temp > 15.0:
