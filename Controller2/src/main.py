@@ -144,6 +144,11 @@ class Controller:
 		self.want_main_heat = False
 		self.want_aux_heat = False
 		self.want_cv_heat = False
+		self.prefer_aux = False
+		self.setpoint_main = 0
+		self.setpoint_aux = 0
+		self.best_main_temp = 0
+		self.best_aux_temp = 0
 		self.manual_override = False
 		self.set_manual_override(manual_override)
 		self.can_cool = False
@@ -320,7 +325,7 @@ class Controller:
 		if not wah:
 			return "main"
 		if wah and wmh:
-			return "main" # FIXME: We could optionally select "aux" here.
+			return "aux" if self.prefer_aux else "main"
 		if wah:
 			return "aux"
 		# Default is always "main", although we shouldn't get here.
@@ -532,6 +537,10 @@ class Controller:
 			wmh = self.want_main_heat
 			wah = self.want_aux_heat
 			wch = self.want_cv_heat
+			self.setpoint_main = sp
+			self.setpoint_aux = spaux
+			self.best_main_temp = ttpo
+			self.best_aux_temp = taux
 
 			# Want heat in main circuit
 			if self._th_on(sp, ttpo, hyst):
@@ -691,6 +700,18 @@ class Controller:
 		self.relay_contactor.set_value(0)
 		self.state = MinerStates.OFF
 
+	async def aux_main_toggle_loop(self):
+		while True:
+			await asyncio.sleep(10)
+			dmain = self.setpoint_main - self.best_main_temp
+			daux = self.setpoint_aux - self.best_aux_temp
+			paux = (daux > dmain)
+			if paux != self.prefer_aux:
+				info(f"Prefer aux changed to {paux!r} Delta_aux: {daux:3.1f} Delta_main: {dmain:3.1f}")
+				self.prefer_aux = paux
+				# Don't make a new decision for the next 15 minutes.
+				await asyncio.sleep(15 * 60)
+
 	async def run(self):
 		await self.webserver.startup()
 		asyncio.create_task(self.sensor_updater())
@@ -698,6 +719,7 @@ class Controller:
 		asyncio.create_task(self.miner_power_loop())
 		asyncio.create_task(self.ambient_control_loop())
 		asyncio.create_task(self.cv_heat_control_loop())
+		asyncio.create_task(self.aux_main_toggle_loop())
 		await self.ha.run()
 
 def main(args):
