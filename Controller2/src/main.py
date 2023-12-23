@@ -70,6 +70,8 @@ class ValuePacer:
 		self.max_v = max_v
 		self.t0 = monotonic()
 		self.v0 = readfunc()
+		if self.v0 is None:
+			self.v0 = 0
 
 	def handle(self):
 		t1 = monotonic()
