@@ -81,9 +81,13 @@ class KachelUI {
 			bp.appendChild(btn);
 		}
 		let bdbtn = this._btn("btn-bidir_valve", "Valve", "btn-relay", (ev) => {
-				this.ws.remote_call("click", ["bidir_valve"], {});
+				this.ws.remote_call("click", ["bidir_valve", "toggle"], {});
 		});
 		bp.appendChild(bdbtn);
+		let midbtn = this._btn("btn-bidir_middle", "Valve Mid", "btn-relay", (ev) => {
+				this.ws.remote_call("click", ["bidir_valve", "middle"], {});
+		});
+		bp.appendChild(midbtn);
 		let ovbtn = this._btn("btn-manual_override", "Manual Override", "btn-relay", (ev) => {
 				this.ws.remote_call("click", ["manual_override"], {});
 		});

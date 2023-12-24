@@ -87,7 +87,7 @@ class WsHandler:
 			data[item] = self._member_translate(getattr(self.ctrl, item))
 		return data
 
-	def do_click(self, elem):
+	def do_click(self, elem, arg=None):
 		if elem == "manual_override":
 			return self.ctrl.set_manual_override(not self.ctrl.manual_override)
 		if not self.ctrl.manual_override:
@@ -101,11 +101,19 @@ class WsHandler:
 			elif isinstance(r, base_io.Bidir):
 				st = r.get_status()
 				p = r.get_position()
-				info(f"UI: click bidir {elem!r} status: {st}, pos: {p}")
-				if st == "off" and (p is None or p == "right"):
-					coro = r.wait_left()
-				elif st == "off" and p == "left":
-					coro = r.wait_right()
+				info(f"UI: click bidir {elem!r} arg: {arg!r}, status: {st}, pos: {p}")
+				if arg == "toggle":
+					if st == "off" and p in (None, "right", "middle"):
+						coro = r.wait_left()
+					elif st == "off" and p == "left":
+						coro = r.wait_right()
+					else:
+						coro = None
+				elif arg == "middle":
+					if st == "off" and p != "middle":
+						coro = r.wait_middle()
+					else:
+						coro = None
 				else:
 					coro = None
 				if coro is not None:
