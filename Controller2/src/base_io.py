@@ -122,6 +122,17 @@ class Bidir:
 		self.turn_off()
 		self.position = "right"
 
+	async def wait_middle(self):
+		if self.position == "middle":
+			return
+		if self.position == "right":
+			self.turn_left()
+		else:
+			self.turn_right()
+		await asyncio.sleep(self.dwell / 2)
+		self.turn_off()
+		self.position = "middle"
+
 class sysfs:
 	def __init__(self, path):
 		self.path = path
