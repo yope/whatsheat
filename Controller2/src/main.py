@@ -248,6 +248,12 @@ class Controller:
 			await self.bidir_valve.wait_right()
 			debug("VALVE: Movement finished")
 
+	async def set_valve_middle(self):
+		if self.bidir_valve.get_position() != "middle":
+			info("VALVE: Moving to mid position...")
+			await self.bidir_valve.wait_middle()
+			debug("VALVE: Movement finished")
+
 	def is_valve_aux_active(self):
 		vs = self.bidir_valve.get_status()
 		vp = self.bidir_valve.get_position()
@@ -325,7 +331,7 @@ class Controller:
 		if not wah:
 			return "main"
 		if wah and wmh:
-			return "aux" if self.prefer_aux else "main"
+			return "middle" if self.prefer_aux else "main"
 		if wah:
 			return "aux"
 		# Default is always "main", although we shouldn't get here.
@@ -371,6 +377,9 @@ class Controller:
 				self.can_cool = True
 			elif heatdest == "aux":
 				await self.set_valve_aux_circuit()
+				self.can_cool = True
+			elif heatdest == "middle":
+				await self.set_valve_middle()
 				self.can_cool = True
 			else:
 				info("Need cooling, but cannot dump heat. Pausing...")
