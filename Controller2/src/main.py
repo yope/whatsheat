@@ -727,8 +727,8 @@ class Controller:
 			if paux != self.prefer_aux:
 				info(f"Prefer aux changed to {paux!r} Delta_aux: {daux:3.1f} Delta_main: {dmain:3.1f}")
 				self.prefer_aux = paux
-				# Don't make a new decision for the next 15 minutes.
-				await asyncio.sleep(15 * 60)
+				# Don't make a new decision for the next 30 minutes.
+				await asyncio.sleep(30 * 60)
 
 	async def run(self):
 		await self.webserver.startup()
