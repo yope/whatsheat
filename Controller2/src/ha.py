@@ -117,6 +117,61 @@ class HAPressureSensor(HASensor):
 	def __init__(self, ha, uid, objid, name):
 		super().__init__(ha, uid, objid, name, "pressure", "hPa")
 
+class HANumber(HABase):
+	def __init__(self, ha, uid, objid, name, devclass, unit, state, minval, maxval):
+		super().__init__(ha, uid, objid, name)
+		self.unit = unit
+		self.devclass = devclass
+		self.field = devclass.capitalize()
+		self.state = state
+		self.minval = minval
+		self.maxval = maxval
+		self.handler = None
+		self.config_message = {
+			"name": self.name,
+			"object_id": self.objid,
+			"unique_id": self.uid,
+			"~": self.topicbase,
+			"cmd_t": f"~/COMMAND",
+			"stat_t": f"~/STATE",
+			"min": self.minval,
+			"max": self.maxval,
+			"step": 0.1, # FIXME: Make this also configurable?
+			"unit_of_measurement": unit,
+			"device_class": devclass,
+		}
+		self.config_topic = f"homeassistant/number/{self.uid}/config"
+
+	def mqtt_connect(self):
+		super().mqtt_connect()
+		self.ha.subscribe(f"{self.topicbase}/COMMAND", self.mqtt_message, fmt="utf-8")
+		self.mqtt_value(self.state)
+
+	def mqtt_message(self, msg):
+		if self.handler == None:
+			warning(f"HA Nyumber: no handler for message: {msg!r}")
+			return
+		try:
+			val = float(msg)
+		except ValueError:
+			error(f"HA Number ERROR: Don't understand number: {msg!r}")
+			return
+		if self.minval <= val <= self.maxval:
+			self.handler(val)
+			self.mqtt_value(val)
+		else:
+			warning(f"HA Number out of range: {val} ({self.minval}...{self.maxval}). Ignoring.")
+
+	def add_handler(self, h):
+		self.handler = h
+
+	def mqtt_value(self, value):
+		self.ha.mqtt_pub(f"{self.topicbase}/STATE", value, content_type="json")
+
+class HATemperatureSetpoint(HANumber):
+	def __init__(self, ha, uid, objid, name, val):
+		super().__init__(ha, uid, objid, name, "temperature", "°C", val, 14.0, 25.0)
+
 class HomeAssistant:
 	def __init__(self, mqttserver, mqttuser, mqttpasswd, base="kachel"):
 		self.client = gmqtt.Client("kachel")
@@ -126,6 +181,7 @@ class HomeAssistant:
 		self.subscriptions = {}
 		self.switches = {}
 		self.sensors = {}
+		self.numbers = {}
 		self.hostname = f"{uuid.getnode():012x}"
 		self.baseid = f"{self.hostname}_{base}"
 		self.topicbase_stem = f"{base}/{self.hostname}/"
@@ -151,6 +207,8 @@ class HomeAssistant:
 			s.mqtt_connect()
 		for s in self.sensors.values():
 			s.mqtt_connect()
+		for s in self.numbers.values():
+			s.mqtt_connect()
 		debug("HA MQTT: Config sent")
 
 	def subscribe(self, topic, handler, fmt="json"):
@@ -164,6 +222,8 @@ class HomeAssistant:
 		for s in self.switches.values():
 			s.mqtt_disconnect()
 		for s in self.sensors.values():
+			s.mqtt_disconnect()
+		for s in self.numbers.values():
 			s.mqtt_disconnect()
 
 	def _call_topic_handler(self, h, fmt, payload):
@@ -242,6 +302,16 @@ class HomeAssistant:
 		self.sensors[objid] = s
 		return s
 
+	def _create_number(self, objid, name, cls, letter, initval):
+		if objid in self.numbers:
+			error(f"HA MQTT ERROR: Number id {objid} already exists!")
+			raise ValueError
+		num = len(self.numbers)
+		uid = self.baseid + f"{letter}{num}"
+		s = cls(self, uid, objid, name, initval)
+		self.numbers[objid] = s
+		return s
+
 	def create_temperature_sensor(self, objid, name):
 		return self._create_sensor(objid, name, HATemperatureSensor, "T")
 
@@ -259,6 +329,9 @@ class HomeAssistant:
 
 	def create_pressure_sensor(self, objid, name):
 		return self._create_sensor(objid, name, HAPressureSensor, "P")
+
+	def create_temperature_setpoint(self, objid, name, initval):
+		return self._create_number(objid, name, HATemperatureSetpoint, "Tsp", initval)
 
 	async def restapi_get(self, url):
 		baseurl = f"http://{self.mqttserver}:8123"
