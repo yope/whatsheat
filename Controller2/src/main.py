@@ -155,6 +155,7 @@ class Controller:
 		self.want_cv_heat = False
 		self.prefer_aux = False
 		self.manual_override = False
+		self.enable_power_control = (self.relay_contactor.get_value() == 1)
 		self.set_manual_override(manual_override)
 		self.can_cool = False
 		self.manual_override_ts = 0
@@ -175,6 +176,10 @@ class Controller:
 			warning("Manual override activated!")
 			self.manual_override_ts = monotonic()
 		self.manual_override = val
+		return True
+
+	def set_enable_power_control(self):
+		self.enable_power_control = True
 		return True
 
 	def mqtt_handle_main_switch(self, state):
@@ -463,6 +468,9 @@ class Controller:
 		# software bugs or other unforeseen issues. Granularity is 5 seconds.
 		while True:
 			await asyncio.sleep(5)
+
+			if not self.enable_power_control:
+				continue
 
 			# Check for state inconsistencies, if miner is surprisingly running:
 			if self.sensors.power_wm.state > 500 and self.state == MS.OFF:

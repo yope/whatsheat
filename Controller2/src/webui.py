@@ -90,6 +90,8 @@ class WsHandler:
 	def do_click(self, elem, arg=None):
 		if elem == "manual_override":
 			return self.ctrl.set_manual_override(not self.ctrl.manual_override)
+		if elem == "enable_power_control":
+			return self.ctrl.set_enable_power_control()
 		if not self.ctrl.manual_override:
 			warning(f"Button {elem!r} clicked, but manual override is OFF")
 			return False

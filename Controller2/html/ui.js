@@ -13,6 +13,7 @@ class KachelUI {
 			});
 		});
 		this.maindiv = document.getElementById("maindiv");
+		this.power_enabled = false;
 		this.build_ui();
 	}
 
@@ -59,7 +60,9 @@ class KachelUI {
 		let ms = this._div_cls("pane", "status");
 		md.appendChild(ms);
 		this.status_miner = ms;
-		let bools = ["miner_ok", "can_cool", "need_cooling", "want_aux_heat", "want_main_heat", "want_cv_heat", "prefer_aux", "manual_override"];
+		let bools = ["miner_ok", "can_cool", "need_cooling", "want_aux_heat",
+			"want_main_heat", "want_cv_heat", "prefer_aux", "enable_power_control",
+			"manual_override"];
 		for (const b of bools) {
 			let d = this._div_cls("status-bool");
 			d.id = `div-${b}`;
@@ -92,6 +95,10 @@ class KachelUI {
 				this.ws.remote_call("click", ["manual_override"], {});
 		});
 		bp.appendChild(ovbtn);
+		let epbtn = this._btn("btn-enable_power_control", "Power Enable", "btn-relay", (ev) => {
+				this.ws.remote_call("click", ["enable_power_control"], {});
+		});
+		bp.appendChild(epbtn);
 		let bidir = this._div_cls("status-bidir");
 		bidir.id = "div-bidir_valve";
 		rs.appendChild(bidir);
@@ -131,6 +138,17 @@ class KachelUI {
 				let d = this._div_cls("sensor-value", "sensor-value-online");
 				d.innerText = `${attr}: ${val}`;
 				sv.appendChild(d);
+			}
+		}
+		// Special bool: If enable_power_control is true, the button has no effect anymore
+		// and needs to be hidden
+		if (!this.power_enabled && (undefined !== obj.enable_power_control)) {
+			if (obj.enable_power_control) {
+				this.power_enabled = true;
+				const btn = document.getElementById("btn-enable_power_control");
+				if (null !== btn) {
+					btn.style.display = "none";
+				}
 			}
 		}
 	}
