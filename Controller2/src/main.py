@@ -36,6 +36,9 @@ class SensorData:
 			return time()
 		return self.age()
 
+	def get_value(self):
+		return self.state
+
 @dataclass
 class Sensors:
 	power_cv: SensorData = dfield(SensorData("CV mains power", "intergas_power"))
@@ -51,6 +54,7 @@ class Sensors:
 	flowrate_cool: SensorData = dfield(SensorData("Coolant flow rate"))
 	temp_tpo: SensorData = dfield(SensorData("Pricom Temperature"))
 	setpoint_tpo: SensorData = dfield(SensorData("Pricom Setoint"))
+	setpoint_aux: SensorData = dfield(SensorData("Zolder Setoint"))
 
 class MinerStates(Enum):
 	OFF = 0
@@ -96,7 +100,6 @@ class Controller:
 	TEMP_AUX_SWITCH_HIGH = 48
 	TEMP_AUX_SWITCH_HYST = 7
 	DELTA_TEMP_CV = 1.5
-	DELTA_TEMP_AUX = 1.5
 	MAX_ON_TIME_CV = 20*60
 	MIN_OFF_TIME_CV = 10*60
 	MIN_ON_TIME_CV = 2*60
@@ -109,6 +112,10 @@ class Controller:
 		self.relay_contactor = base_io.Relay("contactor")
 		self.relay_cv_heat = base_io.Relay("cv_heat_on")
 		self.relay_fan = base_io.Relay("fan")
+		self.setpoint_main = 16.0
+		self.setpoint_aux = 16.0
+		self.best_main_temp = 0
+		self.best_aux_temp = 0
 		self.ha = ha.HomeAssistant(mqtthost, mqttuser, mqttpasswd)
 		self.mqtt_switch_water = self.ha.create_switch("switch_water_pump", "Kachel Water Pump", self.relay_water.get_value())
 		self.mqtt_switch_water.add_handler(self.mqtt_handle_water_switch)
@@ -138,6 +145,8 @@ class Controller:
 		self.mqtt_sensor_illuminance_tpo = self.ha.create_illuminance_sensor("sensor_illuminance_tpo", "Pricom Ambient Light Level")
 		self.mqtt_sensor_humidity_tpo = self.ha.create_humidity_sensor("sensor_humidity_tpo", "Pricom RH")
 		self.mqtt_sensor_setp_tpo = self.ha.create_temperature_sensor("sensor_temp_sp_tpo", "Pricom Temperature Setpoint")
+		self.mqtt_number_setp_aux = self.ha.create_temperature_setpoint("number_temp_sp_aux", "Setpoint Temperature Zolder", self.setpoint_aux)
+		self.mqtt_number_setp_aux.add_handler(self.mqtt_handle_number_setp_aux)
 		self.ha.subscribe("wmpower/deadbeef/whatsminer/SENSOR", self.handle_mqtt_power_wm)
 		self.sensors = Sensors()
 		self.need_cooling = False
@@ -145,10 +154,6 @@ class Controller:
 		self.want_aux_heat = False
 		self.want_cv_heat = False
 		self.prefer_aux = False
-		self.setpoint_main = 0
-		self.setpoint_aux = 0
-		self.best_main_temp = 0
-		self.best_aux_temp = 0
 		self.manual_override = False
 		self.set_manual_override(manual_override)
 		self.can_cool = False
@@ -186,6 +191,10 @@ class Controller:
 
 	def mqtt_handle_fan_switch(self, state):
 		self.relay_fan.set_value(state)
+
+	def mqtt_handle_number_setp_aux(self, val):
+		self.setpoint_aux = val
+		self._setsens(self.sensors.setpoint_aux, val)
 
 	def _setsens(self, sensor, state, ts=None):
 		if ts is None:
@@ -270,6 +279,7 @@ class Controller:
 			ValuePacer(self.pricom_amb_light.get_value, self.mqtt_sensor_illuminance_tpo.mqtt_value, 0, 10000, 0.2, 10),
 			ValuePacer(self.pricom_pressure.get_value, self.mqtt_sensor_pressure_tpo.mqtt_value, 500, 2000, 0.2, 10),
 			ValuePacer(self.pricom_co2.get_value, self.mqtt_sensor_co2_tpo.mqtt_value, 300, 10000, 0.2, 10),
+			ValuePacer(self.sensors.setpoint_aux.get_value, self.mqtt_number_setp_aux.mqtt_value, 2, 40, 0.2, 10),
 		]
 		while True:
 			await asyncio.sleep(1)
@@ -539,7 +549,7 @@ class Controller:
 			sp = s.setpoint_tpo.state
 			if sp < 16:
 				sp = 18 # TPO probably offline
-			spaux = sp - self.DELTA_TEMP_AUX
+			spaux = self.setpoint_aux
 			spcv = sp - self.DELTA_TEMP_CV
 			ttpo = sens_main.state
 			taux = s.temp_zone1.state
@@ -547,7 +557,6 @@ class Controller:
 			wah = self.want_aux_heat
 			wch = self.want_cv_heat
 			self.setpoint_main = sp
-			self.setpoint_aux = spaux
 			self.best_main_temp = ttpo
 			self.best_aux_temp = taux
 
