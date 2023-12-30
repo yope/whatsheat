@@ -266,7 +266,7 @@ class Controller:
 	def is_valve_aux_active(self):
 		vs = self.bidir_valve.get_status()
 		vp = self.bidir_valve.get_position()
-		return (vs == "right") or (vp == "right")
+		return (vs == "right") or (vp in ("right", "middle"))
 
 	async def sensor_updater(self):
 		vps = [
