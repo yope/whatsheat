@@ -275,10 +275,10 @@ class Controller:
 			ValuePacer(self.pricom_temp.get_value, self.mqtt_sensor_temp_tpo.mqtt_value, 2, 50, 0.2, 10),
 			ValuePacer(self.flow_cool.get_value, self.mqtt_sensor_flow_cool.mqtt_value, 0, 50, 0.2, 10),
 			ValuePacer(self.pricom_temp_sp.get_value, self.mqtt_sensor_setp_tpo.mqtt_value, 2, 50, 0.2, 10),
-			ValuePacer(self.pricom_rh.get_value, self.mqtt_sensor_humidity_tpo.mqtt_value, 1, 100, 0.2, 10),
-			ValuePacer(self.pricom_amb_light.get_value, self.mqtt_sensor_illuminance_tpo.mqtt_value, 0, 10000, 0.2, 10),
-			ValuePacer(self.pricom_pressure.get_value, self.mqtt_sensor_pressure_tpo.mqtt_value, 500, 2000, 0.2, 10),
-			ValuePacer(self.pricom_co2.get_value, self.mqtt_sensor_co2_tpo.mqtt_value, 300, 10000, 0.2, 10),
+			ValuePacer(self.pricom_rh.get_value, self.mqtt_sensor_humidity_tpo.mqtt_value, 1, 100, 1, 10),
+			ValuePacer(self.pricom_amb_light.get_value, self.mqtt_sensor_illuminance_tpo.mqtt_value, 0, 10000, 5, 10),
+			ValuePacer(self.pricom_pressure.get_value, self.mqtt_sensor_pressure_tpo.mqtt_value, 500, 2000, 2, 10),
+			ValuePacer(self.pricom_co2.get_value, self.mqtt_sensor_co2_tpo.mqtt_value, 300, 10000, 50, 10),
 			ValuePacer(self.sensors.setpoint_aux.get_value, self.mqtt_number_setp_aux.mqtt_value, 2, 40, 0.2, 10),
 		]
 		while True:
