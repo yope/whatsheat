@@ -78,10 +78,12 @@ class Relay:
 		return self.gpio.get_value()
 
 class Bidir:
-	def __init__(self, relay_on, relay_dir, dwell=10.0):
+	def __init__(self, relay_on, relay_dir, dwell=10.0, midfrac=0.51):
 		self.relay_on = relay_on
 		self.relay_dir = relay_dir
 		self.dwell = dwell
+		# Ensure mid position is between 0.1 and 0.9
+		self.midfrac = max(min(midfrac, 0.9), 0.1)
 		self.position = None
 
 	def turn_left(self):
@@ -126,10 +128,10 @@ class Bidir:
 		if self.position == "middle":
 			return
 		if self.position == "right":
-			self.turn_left()
-		else:
-			self.turn_right()
-		await asyncio.sleep(self.dwell / 2)
+			await self.wait_left()
+		self.turn_right()
+		wait = self.midfrac * self.dwell
+		await asyncio.sleep(wait)
 		self.turn_off()
 		self.position = "middle"
 
