@@ -242,13 +242,13 @@ class Controller:
 		return (ts < monotonic())
 
 	def cv_power_idle(self):
-		return (self.sensors.power_cv.state < 5.0)
+		return (self.cvstate == CVStates.IDLE)
 
 	def cv_power_heat(self):
-		return (self.sensors.power_cv.state > 68)
+		return (self.cvstate == CVStates.HEATING)
 
 	def cv_power_water(self):
-		return (not self.cv_power_idle() and not self.cv_power_heat())
+		return (self.cvstate == CVStates.WATER)
 
 	def _cvp(self):
 		p = self.sensors.power_cv.state
