@@ -64,6 +64,13 @@ class MinerStates(Enum):
 	STOPPING = 4
 	STOPPED = 5
 
+class CVStates(Enum):
+	OFFLINE = 0
+	UNDEFINED = 1
+	IDLE = 2
+	HEATING = 3
+	WATER = 4
+
 class ValuePacer:
 	def __init__(self, readfunc, writefunc, min_v, max_v, delta_v, delta_t):
 		self.readfunc = readfunc
@@ -162,6 +169,7 @@ class Controller:
 		self.miner_ok = True
 		self.commanded_state = MinerStates.OFF
 		self.state = MinerStates.OFF
+		self.cvstate = CVStates.OFFLINE
 		self.sj = base_io.SerialJSON(self.PRICOM_PORT, 115200)
 		self.pricom_temp = self.sj.get_sensor("Temperature", 0.1)
 		self.pricom_rh = self.sj.get_sensor("RH", 0.1)
@@ -241,6 +249,32 @@ class Controller:
 
 	def cv_power_water(self):
 		return (not self.cv_power_idle() and not self.cv_power_heat())
+
+	def _cvp(self):
+		p = self.sensors.power_cv.state
+		if p > 68:
+			return "heat"
+		if p > 35:
+			return "undefined"
+		if p >= 5.0:
+			return "water"
+		return "idle"
+
+	async def track_cv_power_loop(self):
+		while not self.sensors.power_cv.online:
+			await asyncio.sleep(4)
+		self.cvstate = CVStates.UNDEFINED
+		while True:
+			await asyncio.sleep(2)
+			p = self._cvp()
+			if p == "idle":
+				self.cvstate = CVStates.IDLE
+			elif p == "heat":
+				self.cvstate = CVStates.HEATING
+			elif p == "water":
+				self.cvstate = CVStates.WATER
+			elif p == "undefined" and self.cvstate == CVStates.IDLE:
+				self.cvstate = CVStates.WATER
 
 	def can_dump_aux(self):
 		if self.is_night_time():
@@ -746,6 +780,7 @@ class Controller:
 		asyncio.create_task(self.ambient_control_loop())
 		asyncio.create_task(self.cv_heat_control_loop())
 		asyncio.create_task(self.aux_main_toggle_loop())
+		asyncio.create_task(self.track_cv_power_loop())
 		await self.ha.run()
 
 def main(args):
