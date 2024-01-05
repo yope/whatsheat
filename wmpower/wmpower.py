@@ -69,7 +69,7 @@ class Whatsminer:
 	def get_summary_stats(self):
 		try:
 			s = self.run_command("summary")["SUMMARY"][0]
-		except KeyError:
+		except (KeyError, json.JSONDecodeError):
 			return 0, 0, 0, 0, 0, 0
 		if not "Voltage" in s:
 			s["Voltage"]=0.0
