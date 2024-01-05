@@ -1,5 +1,6 @@
 <html>
 	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<script type="module" charset="utf-8">
 import { KachelUI } from "/html/ui.js";
 
@@ -20,51 +21,61 @@ function main()
 	height: 100%;
 	overflow: auto;
 	font-family: sans-serif;
+	color: white;
+	background: black;
+}
+
+@media screen and (max-aspect-ratio: 3/4) {
+	#maindiv {
+		display: block;
+	}
 }
 
 .pane {
 	display: flex;
 	flex-direction: column;
-	background: #fff;
-	color: #000;
+	background: #000;
+	color: #fff;
 	padding: 10px;
 }
 
 .status-bool {
 	padding: 4px;
 	font-size: 1.5rem;
-	background: #8f8;
+	background: #080;
 }
 
 .status-bool-false {
 	text-decoration: line-through;
 	color: #666;
-	background: #f88;
+	background: #800;
 }
 
 .status-relay {
 	padding: 4px;
 	font-size: 1.5rem;
-	background: #f88;
+	background: #800;
 }
 
 .status-relay-on {
-	background: #8f8;
+	background: #080;
 }
 
 .status-bidir {
 	padding: 4px;
 	font-size: 1.5rem;
-	background: #fff;
+	background: #444;
 }
 
 .status-bidir-on {
-	background: #fcc;
+	background: #844;
 }
 
 .btn-relay {
 	padding: 4px;
 	font-size: 1.5rem;
+	background: #333;
+	color: #ddd;
 }
 
 .sensor-value {
@@ -75,7 +86,7 @@ function main()
 }
 		</style>
 	</head>
-	<body>
+	<body style="margin:0px">
 		<div id="maindiv">
 		</div>
 	</body>
