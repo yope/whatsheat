@@ -252,7 +252,7 @@ class Controller:
 
 	def _cvp(self):
 		p = self.sensors.power_cv.state
-		if p > 68:
+		if p > 67:
 			return "heat"
 		if p > 35:
 			return "undefined"
