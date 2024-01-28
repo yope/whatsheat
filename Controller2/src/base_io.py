@@ -135,6 +135,22 @@ class Bidir:
 		self.turn_off()
 		self.position = "middle"
 
+	async def nudge_right(self):
+		if not self.position == "middle":
+			return
+		wait = self.dwell * 0.01
+		self.turn_right()
+		await asyncio.sleep(wait)
+		self.turn_off()
+
+	async def nudge_left(self):
+		if not self.position == "middle":
+			return
+		wait = self.dwell * 0.01
+		self.turn_left()
+		await asyncio.sleep(wait)
+		self.turn_off()
+
 class sysfs:
 	def __init__(self, path):
 		self.path = path
