@@ -91,6 +91,14 @@ class KachelUI {
 				this.ws.remote_call("click", ["bidir_valve", "middle"], {});
 		});
 		bp.appendChild(midbtn);
+		let nabtn = this._btn("btn-bidir_nudge_aux", "Nudge AUX", "btn-relay", (ev) => {
+				this.ws.remote_call("click", ["nudge_valve_aux"], {});
+		});
+		bp.appendChild(nabtn);
+		let nmbtn = this._btn("btn-bidir_nudge_main", "Nudge Main", "btn-relay", (ev) => {
+				this.ws.remote_call("click", ["nudge_valve_main"], {});
+		});
+		bp.appendChild(nmbtn);
 		let ovbtn = this._btn("btn-manual_override", "Manual Override", "btn-relay", (ev) => {
 				this.ws.remote_call("click", ["manual_override"], {});
 		});

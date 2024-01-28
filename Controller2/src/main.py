@@ -289,23 +289,45 @@ class Controller:
 			info("VALVE: Moving to main circuit...")
 			await self.bidir_valve.wait_left()
 			debug("VALVE: Movement finished")
+			return True
+		return False
 
 	async def set_valve_aux_circuit(self):
 		if self.bidir_valve.get_position() != "right":
 			info("VALVE: Moving to aux circuit...")
 			await self.bidir_valve.wait_right()
 			debug("VALVE: Movement finished")
+			return True
+		return False
 
 	async def set_valve_middle(self):
 		if self.bidir_valve.get_position() != "middle":
 			info("VALVE: Moving to mid position...")
 			await self.bidir_valve.wait_middle()
 			debug("VALVE: Movement finished")
+			return True
+		return False
 
 	def is_valve_aux_active(self):
 		vs = self.bidir_valve.get_status()
 		vp = self.bidir_valve.get_position()
 		return (vs == "right") or (vp in ("right", "middle"))
+
+	async def nudge_valve_main_circuit(self):
+		if self.bidir_valve.get_position() == "middle":
+			info("VALVE: Nudging to main circuit...")
+			await self.bidir_valve.nudge_left()
+			debug("VALVE: Movement finished")
+			return True
+		return False
+
+	async def nudge_valve_aux_circuit(self):
+		if self.bidir_valve.get_position() == "middle":
+			info("VALVE: Nudging to aux circuit...")
+			await self.bidir_valve.nudge_right()
+			debug("VALVE: Movement finished")
+			return True
+		return False
 
 	async def sensor_updater(self):
 		vps = [

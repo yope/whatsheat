@@ -92,6 +92,12 @@ class WsHandler:
 			return self.ctrl.set_manual_override(not self.ctrl.manual_override)
 		if elem == "enable_power_control":
 			return self.ctrl.set_enable_power_control()
+		if elem == "nudge_valve_aux":
+			asyncio.create_task(self.ctrl.nudge_valve_aux_circuit())
+			return True
+		if elem == "nudge_valve_main":
+			asyncio.create_task(self.ctrl.nudge_valve_main_circuit())
+			return True
 		if not self.ctrl.manual_override:
 			warning(f"Button {elem!r} clicked, but manual override is OFF")
 			return False
