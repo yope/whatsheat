@@ -106,11 +106,13 @@ class Whatsminer:
 		print(f'Vin: {vin:4.1f} Vac Iin: {iin:4.3f} Aac Pin: {pin:5.1f} VA Fan speed: {fs} rpm')
 
 class HAMiner:
-	def __init__(self, whatsminer, mqtthost, mqttuser, mqttpass):
+	def __init__(self, whatsminer, mqtthost, mqttuser, mqttpass, hostname=None):
 		self._disconnected = asyncio.Event()
 		self.reconnect = True
 		self.retries = 3
-		self.hostname = socket.gethostname()
+		if hostname is None:
+			hostname = socket.gethostname()
+		self.hostname = hostname
 		self.baseid = f"{self.hostname}_wmpower"
 		self.wm = whatsminer
 		self.topicbase = f"wmpower/{self.hostname}/whatsminer"
@@ -253,6 +255,7 @@ def main(args):
 		-m <mqtthost>   : Start MQTT client connected to <mqtthost>
 		-u <mqttuser>   : Specify the user or token to authenticate to MQTT broker
 		-w <mqttpasswd> : Specify optional MQTT broker password
+		-H <hostname>   : Use <hostname> for MQTT topic instead of own hostname
 		--help          : Display this help text
 
 	Environment Variables to avoid leaking credentials to the command line:
@@ -274,6 +277,7 @@ def main(args):
 	command = None
 	resp = None
 	mqtthost = None
+	hostname = None
 	mqttuser = os.environ.get("WMPOWER_MQTTUSER", None)
 	mqttpasswd = os.environ.get("WMPOWER_MQTTPASSWD", None)
 	cmdargs = []
@@ -289,6 +293,8 @@ def main(args):
 			mqttuser = args.pop(0)
 		elif a == "-w":
 			mqttpasswd = args.pop(0)
+		elif a == "-H":
+			hostname = args.pop(0)
 		elif a == "--help":
 			print(inspect.cleandoc(main.__doc__))
 			return 0
