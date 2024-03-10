@@ -86,7 +86,7 @@ class Whatsminer:
 		try:
 			e = self.run_command("edevs")["DEVS"]
 		except KeyError:
-			print("Device not up yet")
+			print("Device not up yet", flush=True)
 			upfreq = "0,0,0"
 		else:
 			upfreq = ",".join([str(x["Upfreq Complete"]) for x in e])
@@ -128,14 +128,14 @@ class HAMiner:
 		self._disconnected.set()
 
 	def mqtt_message(self, cient, topic, payload, qos, props):
-		print(f"MQTT RX topic:{topic}, payload:{payload!r}")
+		print(f"MQTT RX topic:{topic}, payload:{payload!r}", flush=True)
 		tparts = topic.split("/")
 		if tparts[-1] == "mining":
 			onoff = payload.decode("utf-8").lower()
 			if onoff not in ["on", "off"]:
-				print(f"Error, mining payload {onoff!r} not recognized!")
+				print(f"Error, mining payload {onoff!r} not recognized!", flush=True)
 				return
-			print("Set minig to:", payload.decode("utf-8"))
+			print("Set minig to:", payload.decode("utf-8"), flush=True)
 			self.wm.run_command("power", [onoff])
 
 	async def run_async_timed(self, func, *args, timeout=5.0):
@@ -146,7 +146,7 @@ class HAMiner:
 		try:
 			return await self.run_async_timed(self.wm.get_psu_stats)
 		except (TimeoutError, OSError, asyncio.exceptions.TimeoutError):
-			print("WM timeout in get_psu_stats")
+			print("WM timeout in get_psu_stats", flush=True)
 			self.wm.set_offline()
 			return 0, 0, 0, 0
 
@@ -154,7 +154,7 @@ class HAMiner:
 		try:
 			return await self.run_async_timed(self.wm.get_summary_stats)
 		except (TimeoutError, OSError, asyncio.exceptions.TimeoutError):
-			print("WM timeout in get_summary_stats")
+			print("WM timeout in get_summary_stats", flush=True)
 			self.wm.set_offline()
 			return 0, 0, 0, 0, 0, 0
 
@@ -167,11 +167,11 @@ class HAMiner:
 			self._disconnected.clear()
 			if not self.reconnect:
 				break
-			print("MQTT: Connecting...")
+			print("MQTT: Connecting...", flush=True)
 			try:
 				await self.client.connect(self.mqtthost)
 			except ConnectionRefusedError:
-				print("MQTT: Connection refused... retrying in 20 seconds.")
+				print("MQTT: Connection refused... retrying in 20 seconds.", flush=True)
 				await asyncio.sleep(20)
 				continue
 			self.client.subscribe([
@@ -184,7 +184,7 @@ class HAMiner:
 				self.reconnect = False
 
 	async def coro_connection(self):
-		print("MQTT: Connected, processing messages")
+		print("MQTT: Connected, processing messages", flush=True)
 		while not self._disconnected.is_set():
 			vin, iin, pin, fs = await self.get_psu_stats()
 			voltage, fanin, fanout, freq, hr, temp = await self.get_summary_stats()
@@ -308,7 +308,7 @@ def main(args):
 		return 1
 	w = Whatsminer(host, passwd)
 	if mqtthost is not None:
-		haminer = HAMiner(w, mqtthost, mqttuser, mqttpasswd)
+		haminer = HAMiner(w, mqtthost, mqttuser, mqttpasswd, hostname)
 		asyncio.run(haminer.run())
 	elif command is None:
 		w.stats()
