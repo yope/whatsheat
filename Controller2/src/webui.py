@@ -92,6 +92,8 @@ class WsHandler:
 			return self.ctrl.set_manual_override(not self.ctrl.manual_override)
 		if elem == "enable_power_control":
 			return self.ctrl.set_enable_power_control()
+		if elem == "cv_heat_allowed":
+			return self.ctrl.toggle_cv_heat_allowed()
 		if elem == "nudge_valve_aux":
 			asyncio.create_task(self.ctrl.nudge_valve_aux_circuit())
 			return True

@@ -162,6 +162,7 @@ class Controller:
 		self.want_cv_heat = False
 		self.prefer_aux = False
 		self.manual_override = False
+		self.cv_heat_allowed = False
 		self.enable_power_control = (self.relay_contactor.get_value() == 1)
 		self.set_manual_override(manual_override)
 		self.can_cool = False
@@ -188,6 +189,10 @@ class Controller:
 
 	def set_enable_power_control(self):
 		self.enable_power_control = True
+		return True
+
+	def toggle_cv_heat_allowed(self):
+		self.cv_heat_allowed = not self.cv_heat_allowed
 		return True
 
 	def mqtt_handle_main_switch(self, state):
@@ -639,7 +644,7 @@ class Controller:
 				self.want_aux_heat = False
 
 			# Too cold, extra CV heat
-			if self._th_on(spcv, ttpo, hyst):
+			if self._th_on(spcv, ttpo, hyst) and self.cv_heat_allowed:
 				self.want_cv_heat = True
 			elif self._th_off(spcv, ttpo, hyst):
 				self.want_cv_heat = False

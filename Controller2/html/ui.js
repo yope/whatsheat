@@ -61,8 +61,8 @@ class KachelUI {
 		md.appendChild(ms);
 		this.status_miner = ms;
 		let bools = ["miner_ok", "can_cool", "need_cooling", "want_aux_heat",
-			"want_main_heat", "want_cv_heat", "prefer_aux", "enable_power_control",
-			"manual_override"];
+			"want_main_heat", "want_cv_heat", "prefer_aux", "cv_heat_allowed",
+			"enable_power_control",	"manual_override"];
 		for (const b of bools) {
 			let d = this._div_cls("status-bool");
 			d.id = `div-${b}`;
@@ -83,6 +83,10 @@ class KachelUI {
 			rs.appendChild(d);
 			bp.appendChild(btn);
 		}
+		let cvbtn = this._btn("btn-cv_heat_allowed", "CV allowed", "btn-relay", (ev) => {
+				this.ws.remote_call("click", ["cv_heat_allowed", "toggle"], {});
+		});
+		bp.appendChild(cvbtn);
 		let bdbtn = this._btn("btn-bidir_valve", "Valve", "btn-relay", (ev) => {
 				this.ws.remote_call("click", ["bidir_valve", "toggle"], {});
 		});
