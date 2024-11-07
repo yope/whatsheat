@@ -352,7 +352,7 @@ class HomeAssistant:
 			state = obj["state"]
 			lupd = obj["last_updated"]
 		except KeyError:
-			error(f"HA Error: Sensor {objid} dos not exist?")
+			error(f"HA Error: Sensor {objid} does not exist?")
 			return None, None
 		try:
 			state = float(state)
