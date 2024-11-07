@@ -179,6 +179,7 @@ class HomeAssistant:
 		self.ev_disconnect = asyncio.Event()
 		self.ev_disconnect.set()
 		self.subscriptions = {}
+		self.warned_once = {}
 		self.switches = {}
 		self.sensors = {}
 		self.numbers = {}
@@ -357,7 +358,9 @@ class HomeAssistant:
 		try:
 			state = float(state)
 		except ValueError:
-			error(f"HA Error: Sensor {objid} state is non numeric.")
+			if not self.warned_once.get(objid, False):
+				error(f"HA Error: Sensor {objid} state is non numeric.")
+				self.warned_once[objid] = True
 			return None, None
 		ts = datetime.fromisoformat(lupd)
 		return state, ts.timestamp()
