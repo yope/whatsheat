@@ -170,7 +170,7 @@ class HANumber(HABase):
 
 class HATemperatureSetpoint(HANumber):
 	def __init__(self, ha, uid, objid, name, val):
-		super().__init__(ha, uid, objid, name, "temperature", "°C", val, 14.0, 25.0)
+		super().__init__(ha, uid, objid, name, "temperature", "°C", val, 16.0, 22.0)
 
 class HomeAssistant:
 	def __init__(self, mqttserver, mqttuser, mqttpasswd, base="kachel"):
