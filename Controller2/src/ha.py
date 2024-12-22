@@ -217,7 +217,7 @@ class HomeAssistant:
 		if not self.ev_disconnect.is_set():
 			self.client.subscribe(topic, qos=1)
 
-	def _mqtt_disconnect(self, c, packet, exc=None):
+	def _mqtt_disconnect(self, c=None, packet=None, exc=None):
 		self.ev_disconnect.set()
 		info("HA MQTT: Disconnected")
 		for s in self.switches.values():
@@ -273,7 +273,12 @@ class HomeAssistant:
 	async def run(self):
 		asyncio.create_task(self.state_updater())
 		while True:
-			await self.client.connect(self.mqttserver)
+			try:
+				await self.client.connect(self.mqttserver)
+			except (OSError, asyncio.CancelledError):
+				print("HA MQTT client connect error. Waiting 20 seconds...")
+				self._mqtt_disconnect()
+				await asyncio.sleep(20)
 			await self.ev_disconnect.wait()
 
 	def mqtt_pub(self, topic, msg, retain=False, qos=0, content_type='text'):
@@ -348,7 +353,11 @@ class HomeAssistant:
 		return ret
 
 	async def get_sensor_state_and_timestamp(self, objid):
-		obj = await self.restapi_get(f"states/sensor.{objid}")
+		try:
+			obj = await self.restapi_get(f"states/sensor.{objid}")
+		except aiohttp.client_exceptions.ClientConnectorError:
+			error(f"Connection error trying to get sensor.{objid}")
+			return None, None
 		try:
 			state = obj["state"]
 			lupd = obj["last_updated"]
