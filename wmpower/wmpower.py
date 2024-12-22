@@ -170,7 +170,7 @@ class HAMiner:
 			print("MQTT: Connecting...", flush=True)
 			try:
 				await self.client.connect(self.mqtthost)
-			except ConnectionRefusedError:
+			except (ConnectionRefusedError, OSError):
 				print("MQTT: Connection refused... retrying in 20 seconds.", flush=True)
 				await asyncio.sleep(20)
 				continue
