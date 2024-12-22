@@ -590,7 +590,8 @@ class Controller:
 
 	def is_night_time(self):
 		h = localtime().tm_hour
-		if h > 22 or h < 9:
+		#if h > 22 or h < 9:
+		if h < 6:
 			return True
 		return False
 
