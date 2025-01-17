@@ -602,7 +602,7 @@ class Controller:
 			await asyncio.sleep(1)
 			#if not s.setpoint_tpo.online:
 			#	continue
-			if not s.temp_zone0.online or not s.temp_zone1.online:
+			if not s.temp_tpo.online or not s.temp_zone1.online:
 				continue
 			if not s.power_cv.online:
 				continue
@@ -730,7 +730,7 @@ class Controller:
 					continue
 				if not self.sensors.temp_zone1.online:
 					continue
-				if not self.sensors.temp_zone0.online:
+				if not self.sensors.temp_tpo.online:
 					continue
 				if not self.sensors.power_pv.online:
 					continue
