@@ -43,7 +43,7 @@ class SensorData:
 class Sensors:
 	power_cv: SensorData = dfield(SensorData("CV mains power", "intergas_power"))
 	temp_zone0: SensorData = dfield(SensorData("Temperature Living", "temperature_26"))
-	temp_zone1: SensorData = dfield(SensorData("Temperature Zolder", "temperature_11"))
+	temp_zone1: SensorData = dfield(SensorData("Temperature Zolder", "0x00158d0007071c3e_temperature"))
 	power_pv: SensorData = dfield(SensorData("PV power output", "solaredge_i1_ac_power"))
 	power_wmp: SensorData = dfield(SensorData("WMPower meter power", "wmpower_energy_power"))
 	power_wm: SensorData = dfield(SensorData("Whatsminer Power"))
