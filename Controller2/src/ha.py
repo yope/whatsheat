@@ -99,7 +99,7 @@ class HATemperatureSensor(HASensor):
 
 class HAVolumeSensor(HASensor):
 	def __init__(self, ha, uid, objid, name):
-		super().__init__(ha, uid, objid, name, "volume", "l")
+		super().__init__(ha, uid, objid, name, "volume", "L")
 
 class HACO2Sensor(HASensor):
 	def __init__(self, ha, uid, objid, name):
