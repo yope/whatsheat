@@ -347,9 +347,12 @@ class HomeAssistant:
 			"content-type": "application/json",
 		}
 		ret = None
-		async with aiohttp.ClientSession(baseurl, headers=headers) as session:
-			async with session.get(url) as resp:
-				ret = await resp.json()
+		try:
+			async with aiohttp.ClientSession(baseurl, headers=headers) as session:
+				async with session.get(url) as resp:
+					ret = await resp.json()
+		except aiohttp.ServerDisconnectedError:
+			ret = None
 		return ret
 
 	async def get_sensor_state_and_timestamp(self, objid):
