@@ -198,6 +198,15 @@ class HomeAssistant:
 			self.ha_token = ""
 			warning("HA: WARN: file 'home_assistant.token' not found. Please create a long lives access token.")
 
+	def refresh_mqtt_configs(self):
+		for s in self.switches.values():
+			s.send_mqtt_config()
+		for s in self.sensors.values():
+			s.send_mqtt_config()
+		for s in self.numbers.values():
+			s.send_mqtt_config()
+		debug("HA MQTT: Config refreshed")
+
 	def _mqtt_connect(self, c, flags, rc, properties):
 		info("HA MQTT: Connected")
 		self.ev_disconnect.clear()
@@ -263,12 +272,17 @@ class HomeAssistant:
 		pass
 
 	async def state_updater(self):
+		cnt = 0
 		while True:
 			await asyncio.sleep(10)
 			if self.ev_disconnect.is_set():
 				continue
 			for s in self.switches.values():
 				s.mqtt_state()
+			if cnt >= 10:
+				self.refresh_mqtt_configs()
+				cnt = 0
+			cnt += 1
 
 	async def run(self):
 		asyncio.create_task(self.state_updater())
