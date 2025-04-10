@@ -149,7 +149,7 @@ class HANumber(HABase):
 
 	def mqtt_message(self, msg):
 		if self.handler == None:
-			warning(f"HA Nyumber: no handler for message: {msg!r}")
+			warning(f"HA Number: no handler for message: {msg!r}")
 			return
 		try:
 			val = float(msg)
