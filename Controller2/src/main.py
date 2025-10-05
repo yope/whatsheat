@@ -409,7 +409,7 @@ class Controller:
 		if wah and wmh:
 			return "middle" if self.prefer_aux else "main"
 		if wah:
-			return "aux"
+			return "middle"
 		# Default is always "main", although we shouldn't get here.
 		return "main"
 
