@@ -518,6 +518,12 @@ class Controller:
 				elif self.miner_ok:
 					# Old state was ok, new state not ok, complain once.
 					warning("Want miner heat, but miner not Ok.")
+
+			# 9. Check if no heat wanted and go to idle state if that's the case.
+			if not self.want_main_heat and not self.want_aux_heat and self.state == MinerStates.RUNNING:
+				if miner_ok:
+					self.commanded_state = MinerStates.IDLE
+
 			# Store new state
 			self.miner_ok = miner_ok
 
