@@ -185,6 +185,7 @@ class HAMiner:
 
 	async def coro_connection(self):
 		print("MQTT: Connected, processing messages", flush=True)
+		cnt = 0
 		while not self._disconnected.is_set():
 			vin, iin, pin, fs = await self.get_psu_stats()
 			voltage, fanin, fanout, freq, hr, temp = await self.get_summary_stats()
@@ -204,6 +205,10 @@ class HAMiner:
 			minerstate = "ON" if pin > 300 else "OFF"
 			self.client.publish(f"{self.topicbase}/state", minerstate, qos=1, content_type='utf-8')
 			await asyncio.sleep(10)
+			cnt += 1
+			if cnt > 10:
+				cnt = 0
+				self.ha_config()
 
 	def ha_config(self):
 		self.client.publish(f"homeassistant/switch/{self.baseid}S/config", {
