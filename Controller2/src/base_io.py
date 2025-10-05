@@ -78,10 +78,12 @@ class Relay:
 		return self.gpio.get_value()
 
 class Bidir:
-	def __init__(self, relay_on, relay_dir, dwell=10.0, midfrac=0.52):
+	def __init__(self, relay_on, relay_dir, dwell=10.0, midfrac=0.52, slack=0.25):
 		self.relay_on = relay_on
 		self.relay_dir = relay_dir
 		self.dwell = dwell
+		self.slack = slack
+		self.last_move = "none"
 		# Ensure mid position is between 0.1 and 0.9
 		self.midfrac = max(min(midfrac, 0.9), 0.1)
 		self.position = None
@@ -89,10 +91,12 @@ class Bidir:
 	def turn_left(self):
 		self.relay_dir.set_value(0)
 		self.relay_on.set_value(1)
+		self.last_move = "left"
 
 	def turn_right(self):
 		self.relay_dir.set_value(1)
 		self.relay_on.set_value(1)
+		self.last_move = "right"
 
 	def turn_off(self):
 		self.relay_on.set_value(0)
@@ -139,6 +143,8 @@ class Bidir:
 		if not self.position == "middle":
 			return
 		wait = self.dwell * 0.01
+		if self.last_move == "left":
+			wait += self.slack
 		self.turn_right()
 		await asyncio.sleep(wait)
 		self.turn_off()
@@ -147,6 +153,8 @@ class Bidir:
 		if not self.position == "middle":
 			return
 		wait = self.dwell * 0.01
+		if self.last_move == "right":
+			wait += self.slack
 		self.turn_left()
 		await asyncio.sleep(wait)
 		self.turn_off()
