@@ -78,7 +78,7 @@ class Relay:
 		return self.gpio.get_value()
 
 class Bidir:
-	def __init__(self, relay_on, relay_dir, dwell=10.0, midfrac=0.51):
+	def __init__(self, relay_on, relay_dir, dwell=10.0, midfrac=0.52):
 		self.relay_on = relay_on
 		self.relay_dir = relay_dir
 		self.dwell = dwell
