@@ -167,6 +167,7 @@ class HANumber(HABase):
 
 	def mqtt_value(self, value):
 		self.ha.mqtt_pub(f"{self.topicbase}/STATE", value, content_type="json")
+		self.state = value
 
 class HATemperatureSetpoint(HANumber):
 	def __init__(self, ha, uid, objid, name, val):
@@ -205,6 +206,7 @@ class HomeAssistant:
 			s.send_mqtt_config()
 		for s in self.numbers.values():
 			s.send_mqtt_config()
+			s.mqtt_value(s.state)
 		debug("HA MQTT: Config refreshed")
 
 	def _mqtt_connect(self, c, flags, rc, properties):
@@ -367,6 +369,9 @@ class HomeAssistant:
 					ret = await resp.json()
 		except aiohttp.ServerDisconnectedError:
 			ret = None
+		except aiohttp.client_exceptions.ClientOSError:
+			warning("HA: aiohttp: Connection reset by peer")
+			ret = None
 		return ret
 
 	async def get_sensor_state_and_timestamp(self, objid):
@@ -374,6 +379,9 @@ class HomeAssistant:
 			obj = await self.restapi_get(f"states/sensor.{objid}")
 		except aiohttp.client_exceptions.ClientConnectorError:
 			error(f"Connection error trying to get sensor.{objid}")
+			return None, None
+		if obj is None:
+			error(f"HA rest API returen None for sensor {objid}")
 			return None, None
 		try:
 			state = obj["state"]
