@@ -334,6 +334,47 @@ class Controller:
 			return True
 		return False
 
+	async def valve_middle_steering(self):
+		"""
+		Valve nudging to steer miner temperature to optimal range when
+		operating in valve middle position.
+		Does a maximum of 3 consecutive nudges into the same direction.
+		"""
+		nudges = 0
+		await asyncio.sleep(30)
+		mtemp0 = self.get_best_miner_temp()
+		vpos0 = self.bidir_valve.get_position()
+		info("Valve middle steering loop started")
+		h_lim = self.TEMP_AUX_SWITCH_HIGH - 2
+		l_lim = self.TEMP_AUX_SWITCH_HIGH - self.TEMP_AUX_SWITCH_HYST + 2
+		while True:
+			await asyncio.sleep(30)
+			mtemp = self.get_best_miner_temp()
+			dt = (mtemp - mtemp0)
+			mtemp0 = mtemp
+			vpos = self.bidir_valve.get_position()
+			if self.manual_override:
+				continue
+			if not self.miner_ok or not self.need_cooling:
+				continue
+			if not self.can_cool:
+				continue
+			if vpos != "middle":
+				nudges = 0
+				vpos0 = vpos
+				continue
+			if vpos0 != "middle":
+				await asyncio.sleep(60)
+			vpos0 = vpos
+			if mtemp >= h_lim and nudges > -3 and dt > 0:
+				await self.nudge_valve_main_circuit()
+				nudges -= 1
+				info(f"Valve steering nudge MAIN. Nudges = {nudges}, dt = {dt}")
+			elif mtemp <= l_lim and nudges < 3 and dt < 0:
+				await self.nudge_valve_aux_circuit()
+				nudges += 1
+				info(f"Valve steering nudge AUX. Nudges = {nudges}, dt = {dt}")
+
 	async def sensor_updater(self):
 		vps = [
 			ValuePacer(self.temp_in.get_value, self.mqtt_sensor_temp_in.mqtt_value, 2, 120, 0.2, 10),
@@ -815,6 +856,7 @@ class Controller:
 		asyncio.create_task(self.cv_heat_control_loop())
 		asyncio.create_task(self.aux_main_toggle_loop())
 		asyncio.create_task(self.track_cv_power_loop())
+		asyncio.create_task(self.valve_middle_steering())
 		await self.ha.run()
 
 def main(args):
