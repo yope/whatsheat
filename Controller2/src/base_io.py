@@ -78,7 +78,7 @@ class Relay:
 		return self.gpio.get_value()
 
 class Bidir:
-	def __init__(self, relay_on, relay_dir, dwell=10.0, midfrac=0.52, slack=0.25):
+	def __init__(self, relay_on, relay_dir, dwell=10.0, midfrac=0.51, slack=0.25):
 		self.relay_on = relay_on
 		self.relay_dir = relay_dir
 		self.dwell = dwell
@@ -87,20 +87,24 @@ class Bidir:
 		# Ensure mid position is between 0.1 and 0.9
 		self.midfrac = max(min(midfrac, 0.9), 0.1)
 		self.position = None
+		self.moving = False
 
 	def turn_left(self):
 		self.relay_dir.set_value(0)
 		self.relay_on.set_value(1)
 		self.last_move = "left"
+		self.moving = True
 
 	def turn_right(self):
 		self.relay_dir.set_value(1)
 		self.relay_on.set_value(1)
 		self.last_move = "right"
+		self.moving = True
 
 	def turn_off(self):
 		self.relay_on.set_value(0)
 		self.relay_dir.set_value(0)
+		self.moving = False
 
 	def get_status(self):
 		if not self.relay_on.get_value():
@@ -140,7 +144,7 @@ class Bidir:
 		self.position = "middle"
 
 	async def nudge_right(self):
-		if not self.position == "middle":
+		if not self.position == "middle" or self.moving:
 			return
 		wait = self.dwell * 0.01
 		if self.last_move == "left":
@@ -150,7 +154,7 @@ class Bidir:
 		self.turn_off()
 
 	async def nudge_left(self):
-		if not self.position == "middle":
+		if not self.position == "middle" or self.moving:
 			return
 		wait = self.dwell * 0.01
 		if self.last_move == "right":
