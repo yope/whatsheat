@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from time import time
 from logging import debug, info, warning, error
+import logging
 
 class HABase:
 	def __init__(self, ha, uid, objid, name):
@@ -175,7 +176,9 @@ class HATemperatureSetpoint(HANumber):
 
 class HomeAssistant:
 	def __init__(self, mqttserver, mqttuser, mqttpasswd, base="kachel"):
-		self.client = gmqtt.Client("kachel")
+		mqlogger = logging.getLogger("gmqtt")
+		mqlogger.setLevel(logging.WARNING)
+		self.client = gmqtt.Client("kachel", logger=mqlogger)
 		self.mqttserver = mqttserver
 		self.ev_disconnect = asyncio.Event()
 		self.ev_disconnect.set()
