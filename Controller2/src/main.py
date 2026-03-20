@@ -233,7 +233,7 @@ class Controller:
 		if "Power" in obj:
 			self._setsens(self.sensors.power_wm, obj["Power"])
 		else:
-			self.sensors.power.online = False
+			self.sensors.power_wm.online = False
 		if "HashRate" in obj:
 			self._setsens(self.sensors.hashrate_wm, obj["HashRate"])
 		else:
